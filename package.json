@@ -1,0 +1,23 @@
+{
+  "name": "minecraft-solver-bot",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "repository": "https://github.com/GenerelSchwerz/minecraft-solver-bot",
+  "author": "GenerelSchwerz <xXSG.KingXx@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "mineflayer": "^4.14.0",
+    "strict-event-emitter": "^0.5.1",
+    "strict-event-emitter-types": "^2.0.0",
+    "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "scripts": {
+    "start": "bun run ./dist/index.js"
+  }
+}
