@@ -303,6 +303,7 @@ class CraftFurnaceNode extends Node {
   name = "craftFurnace";
 
   isAlreadyCompleted(ctx: SimContext): boolean {
+    // console.log('check!', ctx.furnace > 0)
     return ctx.furnace > 0;
   }
 
@@ -426,23 +427,16 @@ craftFurnaceNode.addChildren(smeltIronNode);
 smeltIronNode.addChildren(collectWoodNode, craftIronPickaxeNode);
 
 
-const planner = new WeightedNFAPlanner(entryNode, craftFurnaceNode, test1, 40);
+const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, test1, 30);
 
-const start = performance.now();
-let plans = planner.plan();
+const start0 = performance.now();
+let plans = planner.plan2();
+const end0 = performance.now();
 
-const end = performance.now();
-
-// plans = plans.filter(n=>n.simContext.stoneAxe>0)
-
-// sort plan by lowest cost
 const costs = plans.map((n) => n.cost);
 const lowest = costs.reduce((a, b) => (a > b ? b : a));
 const index = costs.indexOf(lowest);
+const bestPath = plans[index];
 
-
-
-// console.log(plans.map((n) => [n.toBetterString(), JSON.stringify(n.simContext), `${n.nodes.length} ${n.cost}`]).join("\n\n"));
-
-console.log("took", end - start, "ms");
-console.log(plans[index].toBetterString(), plans[index].cost, plans[index].simContext, plans[index].nodes.length);
+console.log("took", end0 - start0, "ms");
+console.log(bestPath.toBetterString(), bestPath.cost, bestPath.simContext, bestPath.nodes.length);

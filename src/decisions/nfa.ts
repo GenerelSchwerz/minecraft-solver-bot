@@ -1,7 +1,7 @@
 import { v4 } from "uuid";
 import { EventEmitter } from "events";
 import { StrictEventEmitter } from "strict-event-emitter-types";
-import { LogicNode, LogicPath } from ".";
+import { LogicNode, LogicPath, findAllChildren } from ".";
 
 /**
  * The plan is to create a weighted NFA.
@@ -64,8 +64,8 @@ export class WeightedNFAPlanner<C, SC> {
   private readonly _simContext: SC;
   private readonly _end: LogicNode<C, SC>;
 
-  private readonly _truncatedNodes: Set<LogicNode<C,SC>> = new Set();
-  private readonly _childMap: Map<string, Set<LogicNode<C,SC>>> = new Map();
+  private readonly _truncatedNodes: Set<LogicNode<C, SC>> = new Set();
+  private readonly _childMap: Map<string, Set<LogicNode<C, SC>>> = new Map();
 
   constructor(root: LogicNode<C, SC>, end: LogicNode<C, SC>, simContext: SC, maxDepth = 20) {
     this._root = root;
@@ -73,19 +73,21 @@ export class WeightedNFAPlanner<C, SC> {
     this._end = end;
     this.maxDepth = maxDepth;
 
+    console.log(findAllChildren(this._root).size);
+
     this.trunc3();
-    this.loadChildren()
+    this.loadChildren();
+
+    console.log(this._truncatedNodes.size);
 
     // console.log(this._childMap.entries())
   }
-
 
   loadChildren() {
     for (const node of this._truncatedNodes) {
       const children = node.children;
       const childSet = this._childMap.get(node.uuid) ?? new Set();
       for (const child of node.children) {
-        
         if (this._truncatedNodes.has(child)) {
           childSet.add(child);
         }
@@ -94,14 +96,8 @@ export class WeightedNFAPlanner<C, SC> {
     }
   }
 
- 
-
-  
-
-  trunc3(endNode: LogicNode = this._end, ret=this._truncatedNodes,  depth=0): Set<LogicNode> {
-
+  trunc3(endNode: LogicNode = this._end, ret = this._truncatedNodes, depth = 0): Set<LogicNode> {
     // const ret = new Set();
-
 
     if (depth >= this.maxDepth) return ret;
 
@@ -115,13 +111,11 @@ export class WeightedNFAPlanner<C, SC> {
 
     ret.add(endNode);
     for (const parent of endNode.parents) {
-      this.trunc3(parent, ret, depth+1);
-    
+      this.trunc3(parent, ret, depth + 1);
     }
 
     return ret;
   }
-
 
   plan() {
     const paths = this._plan(this._root, this._simContext, this._end);
@@ -131,15 +125,14 @@ export class WeightedNFAPlanner<C, SC> {
   _plan(root: LogicNode<C, SC>, simContext: SC, end: LogicNode<C, SC>, depth = 0, cost = 0): NewLogicPath<C, SC>[] {
     if (depth >= this.maxDepth) return [];
 
-    if (!root.shouldEnter(simContext)) return [];
-
     let addCost;
-
-    if (!root.isAlreadyCompleted(simContext)) {
+    if (root.isAlreadyCompleted(simContext)) {
+      addCost = 0;
+    } else if (root.shouldEnter(simContext)) {
       root.simExit?.(simContext);
       addCost = root._calculateCost(simContext);
     } else {
-      addCost = 0;
+      return [];
     }
 
     if (root === end) {
@@ -148,8 +141,7 @@ export class WeightedNFAPlanner<C, SC> {
 
     const paths: NewLogicPath<C, SC>[] = [];
     for (const child of root.children) {
-      if (!child.shouldEnter(simContext)) continue;
-      if (child.isAlreadyCompleted(simContext)) continue;
+      if (!child._shouldEnter(simContext)) continue;
       const copiedContext = { ...simContext };
       child.simEnter?.(copiedContext);
       const childPaths = this._plan(child, copiedContext, end, depth + 1, cost + addCost);
@@ -166,21 +158,17 @@ export class WeightedNFAPlanner<C, SC> {
   }
 
   _plan2(root: LogicNode<C, SC>, simContext: SC, end: LogicNode<C, SC>, depth = 0, cost = 0): NewLogicPath<C, SC>[] {
-    if (depth > this.maxDepth) return [];
-    if (!this._truncatedNodes.has(root)) {
-      console.log(root.name);
-      return [];
-    }
-
-    if (!root.shouldEnter(simContext)) return [];
+    if (depth >= this.maxDepth) return [];
+    if (!this._truncatedNodes.has(root)) return [];
 
     let addCost;
-
-    if (!root.isAlreadyCompleted(simContext)) {
+    if (root.isAlreadyCompleted(simContext)) {
+      addCost = 0;
+    } else if (root.shouldEnter(simContext)) {
       root.simExit?.(simContext);
       addCost = root._calculateCost(simContext);
     } else {
-      addCost = 0;
+      return [];
     }
 
     if (root === end) {
@@ -192,8 +180,7 @@ export class WeightedNFAPlanner<C, SC> {
     const got = this._childMap.get(root.uuid);
     if (!got) throw new Error("no children");
     for (const child of got.keys()) {
-      if (!child.shouldEnter(simContext)) continue;
-      if (child.isAlreadyCompleted(simContext)) continue;
+      if (!child._shouldEnter(simContext)) continue;
       const copiedContext = { ...simContext };
       child.simEnter?.(copiedContext);
       const childPaths = this._plan(child, copiedContext, end, depth + 1, cost + addCost);

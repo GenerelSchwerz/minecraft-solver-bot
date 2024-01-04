@@ -13,6 +13,15 @@ export function linkNodes(node: LogicNode) {
   }
 }
 
+export function findAllChildren(node: LogicNode, set= new Set<LogicNode>()): Set<LogicNode>{
+  set.add(node)
+  for (const child of node.children) {
+    if (set.has(child)) continue;
+    findAllChildren(child, set)
+  }
+  return set;
+}
+
 export function findPathsToBeginning(
   endNode: LogicNode,
   stopIf: (node: LogicNode) => boolean = () => false,
@@ -73,12 +82,18 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
 
   private _cachedCost: number = -1;
 
+  private _cachedConsider: boolean = true;
+
   public get cachedCost(): number {
     return this._cachedCost;
   }
 
   public get calculated(): boolean {
     return this._cachedCost !== -1;
+  }
+
+  public get cachedConsider(): boolean {  
+    return this._cachedConsider;
   }
 
   public readonly immediateReturn: boolean = false;
@@ -96,7 +111,14 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
     return this._cachedCost;
   }
 
+  _shouldConsider(ctx: Context): boolean {
+    this._cachedConsider = this.shouldConsider(ctx);
+    return this._cachedConsider;
+  }
 
+  shouldConsider(ctx: Context): boolean {
+    return true;
+  }
 
   protected calculateCost(ctx: SimContext): number {
     return 0;
@@ -140,6 +162,10 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
 
   shouldEnter(ctx: SimContext): boolean {
     return true;
+  }
+
+  _shouldEnter(ctx: SimContext): boolean {
+    return this.shouldEnter(ctx) || this.isAlreadyCompleted(ctx);
   }
 
   isFinished(): boolean {
