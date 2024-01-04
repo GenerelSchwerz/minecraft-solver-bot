@@ -25,24 +25,7 @@ interface SimContext {
 
 const test0: Context = {};
 
-const test1: SimContext = {
-  wood: 0,
-  woodenAxe: 0,
-  stoneAxe: 0,
-  stone: 0,
-  woodenPickaxe: 0,
-  dirt: 0,
-  ironOre: 0,
-  ironPickaxe: 0,
-  furnace: 0,
-  iron: 0,
-  stonePickaxe: 0,
-  sticks: 0,
-  diamonds: 0,
-  diamondPickaxe: 0,
-  diamondAxe: 0,
-  ironAxe: 0
-};
+
 
 abstract class Node extends LogicNode<Context, SimContext> {}
 
@@ -376,6 +359,26 @@ const craftFurnaceNode = new CraftFurnaceNode();
 
 const smeltIronNode = new SmeltIronNode(3);
 
+const test1: SimContext = {
+  wood: 0,
+  woodenAxe: 0,
+  stoneAxe: 0,
+  stone: 0,
+  woodenPickaxe: 0,
+  dirt: 0,
+  ironOre: 0,
+  ironPickaxe: 0,
+  furnace: 0,
+  iron: 0,
+  stonePickaxe: 0,
+  sticks: 0,
+  diamonds: 0,
+  diamondPickaxe: 0,
+  diamondAxe: 0,
+  ironAxe: 0
+};
+
+
 entryNode.addChildren(
   collectDirtNode,
   collectWoodNode,
@@ -426,7 +429,7 @@ smeltIronNode.addChildren(collectWoodNode, craftIronPickaxeNode);
 const planner = new WeightedNFAPlanner(entryNode, craftFurnaceNode, test1, 40);
 
 const start = performance.now();
-let plans = planner.plan2();
+let plans = planner.plan();
 
 const end = performance.now();
 
@@ -436,6 +439,8 @@ const end = performance.now();
 const costs = plans.map((n) => n.cost);
 const lowest = costs.reduce((a, b) => (a > b ? b : a));
 const index = costs.indexOf(lowest);
+
+
 
 // console.log(plans.map((n) => [n.toBetterString(), JSON.stringify(n.simContext), `${n.nodes.length} ${n.cost}`]).join("\n\n"));
 
