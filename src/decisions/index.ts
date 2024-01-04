@@ -13,11 +13,11 @@ export function linkNodes(node: LogicNode) {
   }
 }
 
-export function findAllChildren(node: LogicNode, set= new Set<LogicNode>()): Set<LogicNode>{
-  set.add(node)
+export function findAllChildren(node: LogicNode, set = new Set<LogicNode>()): Set<LogicNode> {
+  set.add(node);
   for (const child of node.children) {
     if (set.has(child)) continue;
-    findAllChildren(child, set)
+    findAllChildren(child, set);
   }
   return set;
 }
@@ -80,35 +80,20 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
 >) {
   abstract name: string;
 
-  private _cachedCost: number = -1;
-
   private _cachedConsider: boolean = true;
 
-  public get cachedCost(): number {
-    return this._cachedCost;
-  }
-
-  public get calculated(): boolean {
-    return this._cachedCost !== -1;
-  }
-
-  public get cachedConsider(): boolean {  
+  public get cachedConsider(): boolean {
     return this._cachedConsider;
   }
 
   public readonly immediateReturn: boolean = false;
 
-  cleanup?: () => void
-
-  _clearCost() {
-    this._cachedCost = -1;
-  }
+  cleanup?: () => void;
 
   // abstract get cost(): number;
 
   _calculateCost(ctx: SimContext): number {
-    this._cachedCost = this.calculateCost(ctx);
-    return this._cachedCost;
+    return this.calculateCost(ctx);
   }
 
   _shouldConsider(ctx: Context): boolean {
@@ -136,7 +121,7 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
 
   public readonly uuid = v4();
 
-  children: LogicNode<Context,SimContext>[] = [];
+  children: LogicNode<Context, SimContext>[] = [];
 
   readonly parents: LogicNode<Context, SimContext>[] = [];
 
@@ -144,7 +129,7 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
     for (const parent of parents) {
       if (this.parents.includes(parent)) return; // already added, prevent multiple if already specified.
       this.parents.push(parent);
-      parent.addChildren(this)
+      parent.addChildren(this);
     }
   }
 
@@ -152,8 +137,24 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
     for (const child of children) {
       if (this.children.includes(child)) return; // already added, prevent multiple if already specified.
       this.children.push(child);
-      child.addParents(this)
+      child.addParents(this);
     }
+  }
+
+  /**
+   * Sort children by length, and prioritzing recursive children.
+   */
+  sortChildren(target: LogicNode<Context, SimContext>) {
+    this.children.sort(
+      (a, b) => a.children.length + (a.children.includes(this) ? -1000 : 0) - (b.children.length + (b.children.includes(this) ? -1000 : 0))
+    );
+
+    if (this.children.includes(target)) {
+      this.children.splice(this.children.indexOf(target), 1);
+      this.children.unshift(target);
+    }
+    // this.children.sort((a, b) => Math.random() - Math.random());
+    // console.log(this.children.map((c) => c.name));
   }
 
   isAlreadyCompleted(ctx: SimContext): boolean {
@@ -425,22 +426,20 @@ export class LogicPath<Context = unknown, SimContext = unknown> {
 
   getCost(): number {
     let cost = 0;
-    
+
     const simCtx = structuredClone(this.#simCtx);
     for (let i = this.#indexes[this.#current.uuid]; i < this.#internal.length; i++) {
       const node = this.#internal[i];
       if (node.isAlreadyCompleted(this.#simCtx)) continue;
-      node.simInit?.(this.simCtx)
-
+      node.simInit?.(this.simCtx);
     }
 
     for (let i = this.#indexes[this.#current.uuid]; i < this.#internal.length; i++) {
       const node = this.#internal[i];
       if (node.isAlreadyCompleted(this.#simCtx)) continue;
 
-      node.simEnter?.(simCtx)
+      node.simEnter?.(simCtx);
 
-      
       if (!node.shouldEnter(simCtx)) {
         // console.log("not considering", node.name);
         return Infinity;
@@ -468,8 +467,7 @@ export class LogicPath<Context = unknown, SimContext = unknown> {
     for (let i = this.#indexes[this.#current.uuid]; i < this.#internal.length; i++) {
       const node = this.#internal[i];
       if (node.isAlreadyCompleted(this.#simCtx)) continue;
-      node.simInit?.(this.simCtx)
-
+      node.simInit?.(this.simCtx);
     }
 
     for (let i = this.#indexes[this.#current.uuid] + 1; i < this.#internal.length; i++) {
@@ -479,16 +477,15 @@ export class LogicPath<Context = unknown, SimContext = unknown> {
         continue;
       }
 
-      node.simEnter?.(simCtx)
+      node.simEnter?.(simCtx);
 
       if (!node.shouldEnter(simCtx)) {
         // console.log("not considering", node.name);
         return Infinity;
       }
 
-
       // if not is not considered, its children will not be, so break.
-      
+
       cost += node._calculateCost(simCtx);
       node.simExit?.(simCtx);
       // console.log("adding cost", node.name, node.cachedCost);
@@ -567,13 +564,12 @@ export class LogicPathGraph<Context = unknown, SimContext = unknown> {
   }
 
   private enterNode(node: LogicNode<Context, SimContext>) {
-    
     this.#currentNode.onExit?.(this.currentCtx!);
     this.#visited.push(this.#currentNode);
-    this.#currentNode.cleanup?.()
+    this.#currentNode.cleanup?.();
 
     this.#currentNode = node;
-    
+
     // const failFn = this.failHandler.bind(this, node)
     // const interFn = this.interruptHandler.bind(this, node)
     // const exitFn = this.exitHandler.bind(this, node)
@@ -633,14 +629,9 @@ export class LogicPathGraph<Context = unknown, SimContext = unknown> {
     return paths[costs.indexOf(lowestCost)];
   }
 
+  interruptHandler = (node: LogicNode) => {};
 
-  interruptHandler = (node: LogicNode) => {
-
-  }
-
-  failHandler = (node: LogicNode) => {
-
-  }
+  failHandler = (node: LogicNode) => {};
 
   exitHandler = (node: LogicNode) => {
     if (this.#currentPath.completed) {
@@ -657,7 +648,7 @@ export class LogicPathGraph<Context = unknown, SimContext = unknown> {
         subPaths.push(path);
         continue;
       }
-      
+
       const subPath = path.sublist(this.#currentNode);
       const cost = subPath.calculateCosts();
       costs.push(cost);

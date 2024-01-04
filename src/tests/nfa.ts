@@ -25,8 +25,6 @@ interface SimContext {
 
 const test0: Context = {};
 
-
-
 abstract class Node extends LogicNode<Context, SimContext> {}
 
 class CollectWoodNode extends Node {
@@ -261,8 +259,6 @@ class CraftIronPickaxeNode extends Node {
   }
 }
 
-
-
 class CraftDiamondPickaxeNode extends Node {
   name = "craftDiamondPickaxe";
 
@@ -320,7 +316,7 @@ class CraftFurnaceNode extends Node {
 class SmeltIronNode extends Node {
   name = "smeltIron";
 
-  woodAmt: number
+  woodAmt: number;
 
   constructor(public amt: number) {
     super();
@@ -332,7 +328,7 @@ class SmeltIronNode extends Node {
   }
 
   simExit(context: SimContext): void {
-    context.wood-= this.woodAmt;
+    context.wood -= this.woodAmt;
     context.ironOre -= this.amt;
     context.iron += this.amt;
   }
@@ -358,50 +354,52 @@ const craftDiamondAxeNode = new CraftDiamondAxeNode();
 const craftSticksNode = new CraftSticksNode(1);
 const craftFurnaceNode = new CraftFurnaceNode();
 
-const smeltIronNode = new SmeltIronNode(3);
+const smeltIronNode = new SmeltIronNode(1);
 
-const test1: SimContext = {
-  wood: 0,
-  woodenAxe: 0,
-  stoneAxe: 0,
-  stone: 0,
-  woodenPickaxe: 0,
-  dirt: 0,
-  ironOre: 0,
-  ironPickaxe: 0,
-  furnace: 0,
-  iron: 0,
-  stonePickaxe: 0,
-  sticks: 0,
-  diamonds: 0,
-  diamondPickaxe: 0,
-  diamondAxe: 0,
-  ironAxe: 0
-};
 
 
 entryNode.addChildren(
-  collectDirtNode,
-  collectWoodNode,
-  collectStoneNode,
-  collectIronNode,
-  collectDiamondNode,
-  craftWoodenAxeNode,
-  craftWoodenPickaxeNode,
-  craftStoneAxeNode,
-  craftStonePickaxeNode,
-  craftIronPickaxeNode,
-  craftIronAxeNode,
   craftDiamondPickaxeNode,
   craftDiamondAxeNode,
+  craftIronPickaxeNode,
+  craftIronAxeNode,
+  craftStonePickaxeNode,
+  craftStoneAxeNode,
+  craftWoodenPickaxeNode,
+  craftWoodenAxeNode,
+  
   craftSticksNode,
-  craftFurnaceNode
+  craftFurnaceNode,
+  collectDirtNode,
+  collectStoneNode,
+  collectWoodNode,
+  collectIronNode,
+  collectDiamondNode,
+  
 );
 
 collectDirtNode.addChildren(collectDirtNode);
-collectWoodNode.addChildren(collectWoodNode, craftSticksNode);
+collectWoodNode.addChildren(
+    // 
+  collectWoodNode,
+  craftSticksNode,
+  // entryNode,
+  // craftDiamondPickaxeNode,
+  // craftDiamondAxeNode,
+  // craftIronPickaxeNode,
+  // craftIronAxeNode,
+  // craftStoneAxeNode,
+  // craftStonePickaxeNode,
+  // craftWoodenAxeNode,
+  // craftWoodenPickaxeNode,
+
+ 
+  
+  
+  
+);
 collectStoneNode.addChildren(collectStoneNode, craftFurnaceNode, craftStoneAxeNode, craftStonePickaxeNode);
-collectIronNode.addChildren(collectIronNode, craftFurnaceNode);
+collectIronNode.addChildren( collectIronNode, craftFurnaceNode);
 collectDiamondNode.addChildren(collectDiamondNode, craftDiamondPickaxeNode);
 craftWoodenAxeNode.addChildren(collectWoodNode);
 craftWoodenPickaxeNode.addChildren(collectStoneNode);
@@ -412,7 +410,6 @@ craftIronAxeNode.addChildren(collectWoodNode);
 craftDiamondPickaxeNode.addChildren(collectDiamondNode);
 craftDiamondAxeNode.addChildren(collectWoodNode);
 
-
 craftSticksNode.addChildren(
   craftWoodenAxeNode,
   craftWoodenPickaxeNode,
@@ -421,22 +418,67 @@ craftSticksNode.addChildren(
   craftIronPickaxeNode,
   craftIronAxeNode,
   craftDiamondPickaxeNode,
-  craftDiamondAxeNode,
+  craftDiamondAxeNode
 );
 craftFurnaceNode.addChildren(smeltIronNode);
 smeltIronNode.addChildren(collectWoodNode, craftIronPickaxeNode);
 
+const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, 35, true);
 
-const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, test1, 30);
+const test1: SimContext = {
+  wood: 0,
+  woodenAxe: 0,
+  stoneAxe: 0,
+  stone: 2,
+  woodenPickaxe: 0,
+  dirt: 0,
+  ironOre: 0,
+  ironPickaxe: 0,
+  furnace: 0,
+  iron: 2,
+  stonePickaxe: 0,
+  sticks: 0,
+  diamonds: 0,
+  diamondPickaxe: 0,
+  diamondAxe: 0,
+  ironAxe: 0,
+};
 
-const start0 = performance.now();
-let plans = planner.plan2();
-const end0 = performance.now();
+function normalPlan() {
+  let plans;
+  const start0 = performance.now();
+  plans = planner.plan3(test0, test1);
+  const end0 = performance.now();
 
-const costs = plans.map((n) => n.cost);
-const lowest = costs.reduce((a, b) => (a > b ? b : a));
-const index = costs.indexOf(lowest);
-const bestPath = plans[index];
+  console.log(plans.length, "possible plans");
+  const bestPath = planner.bestPlan(plans);
 
-console.log("took", end0 - start0, "ms");
-console.log(bestPath.toBetterString(), bestPath.cost, bestPath.simContext, bestPath.nodes.length);
+  console.log("planning took", end0 - start0, "ms");
+  console.log(bestPath.toBetterString());
+  console.log(bestPath.cost, bestPath.simContext, bestPath.nodes.length);
+}
+
+function fastPlan() {
+  const start0 = performance.now();
+  const paths = planner.fastplan(test1, 10);
+  const end0 = performance.now();
+
+  console.log(paths.length, "possible paths", paths.map((p) => p.cost));
+  const bestPath = planner.bestPlan(paths);
+
+  console.log("fastplan took", end0 - start0, "ms");
+  console.log(bestPath.toBetterString());
+  console.log(bestPath.cost, bestPath.simContext);
+
+  const start1 = performance.now();
+  const processedPath = planner.postFastPlan(bestPath, test1);
+  const end1 = performance.now();
+
+  console.log("post-processing took", end1 - start1, "ms");
+
+  console.log(processedPath.toBetterString());
+  console.log(processedPath.cost, processedPath.simContext);
+}
+
+// normalPlan();
+fastPlan();
