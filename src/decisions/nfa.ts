@@ -64,8 +64,8 @@ export class WeightedNFAPlanner<C, SC> {
   private readonly _simContext: SC;
   private readonly _end: LogicNode<C, SC>;
 
-  private readonly _truncatedNodes: Set<string> = new Set();
-  private readonly _childMap: Map<string, LogicNode<C, SC>[]> = new Map();
+  private readonly _truncatedNodes: Set<LogicNode<C,SC>> = new Set();
+  private readonly _childMap: Map<string, Set<LogicNode<C,SC>>> = new Map();
 
   constructor(root: LogicNode<C, SC>, end: LogicNode<C, SC>, simContext: SC, maxDepth = 20) {
     this._root = root;
@@ -73,65 +73,53 @@ export class WeightedNFAPlanner<C, SC> {
     this._end = end;
     this.maxDepth = maxDepth;
 
-    // this.truncOffChildren(this._root);
+    this.trunc3();
+    this.loadChildren()
 
-    // console.log("size", this._truncatedNodes.size)
-    // console.log(this._truncatedNodes.keys())
+    // console.log(this._childMap.entries())
+  }
+
+
+  loadChildren() {
+    for (const node of this._truncatedNodes) {
+      const children = node.children;
+      const childSet = this._childMap.get(node.uuid) ?? new Set();
+      for (const child of node.children) {
+        
+        if (this._truncatedNodes.has(child)) {
+          childSet.add(child);
+        }
+      }
+      this._childMap.set(node.uuid, childSet);
+    }
   }
 
  
 
-  trunc2(endNode: LogicNode, path: LogicNode[] = [], depth=0) {
+  
+
+  trunc3(endNode: LogicNode = this._end, ret=this._truncatedNodes,  depth=0): Set<LogicNode> {
+
+    // const ret = new Set();
+
+
+    if (depth >= this.maxDepth) return ret;
+
+    // if (endNode.parents.length === 0) {
+    //   if (endNode !== this._root) return ret;
+    //   ret.add(endNode);
+    //   return ret;
+    // }
+
+    if (ret.has(endNode)) return ret;
+
+    ret.add(endNode);
+    for (const parent of endNode.parents) {
+      this.trunc3(parent, ret, depth+1);
     
-    if (depth > this.maxDepth) return;
-    
-    path.push(endNode);
-    if (endNode.children.length === 0) {
-      if (endNode !== this._end) return;
-      for (let i = path.length-1; i > 0; i--) {
-        const parent = path[i];
-        const child = path[i-1];
-        const val = this._childMap.get(parent.uuid) ?? [];
-        val.push(child);
-        this._childMap.set(parent.uuid, val);
-        this._truncatedNodes.add(parent.uuid)
-      }
-      path = []
-      return;
     }
 
-    for (const child of endNode.children) {
-      this.trunc2(child, [...path], depth+1);
-    }
-  }
-
-  truncOffChildren(endNode: LogicNode, path: LogicNode[] = [], depth=0) {
-    if (depth > this.maxDepth) return;
-    // console.log(path.length, endNode.children.length)
-    path.push(endNode);
-    if (endNode.children.length === 0) {
-      if (endNode !== this._end) return;
-    //   console.log(path.map(n=>n.name))
-      for (let i = 0; i < path.length-1; i++) {
-        const parent = path[i];
-        const child = path[i+1];
-        console.log(parent.name, '->', child.name)
-        const index = parent.children.findIndex(n=>n===child)
-        if (index >= 0) 
-        parent.children = parent.children.splice(index, 1)
-
-
-        // delete parent.children[index];
-      }
-      path = []
-      return;
-    }
-
-
-
-    for (const child of endNode.children) {
-      this.truncOffChildren(child, [...path], depth+1);
-    }
+    return ret;
   }
 
 
@@ -141,7 +129,7 @@ export class WeightedNFAPlanner<C, SC> {
   }
 
   _plan(root: LogicNode<C, SC>, simContext: SC, end: LogicNode<C, SC>, depth = 0, cost = 0): NewLogicPath<C, SC>[] {
-    if (depth > this.maxDepth) return [];
+    if (depth >= this.maxDepth) return [];
 
     if (!root.shouldEnter(simContext)) return [];
 
@@ -179,7 +167,7 @@ export class WeightedNFAPlanner<C, SC> {
 
   _plan2(root: LogicNode<C, SC>, simContext: SC, end: LogicNode<C, SC>, depth = 0, cost = 0): NewLogicPath<C, SC>[] {
     if (depth > this.maxDepth) return [];
-    if (!this._truncatedNodes.has(root.uuid)) {
+    if (!this._truncatedNodes.has(root)) {
       console.log(root.name);
       return [];
     }
@@ -201,7 +189,9 @@ export class WeightedNFAPlanner<C, SC> {
 
     const paths: NewLogicPath<C, SC>[] = [];
 
-    for (const child of this._childMap.get(root.uuid)!) {
+    const got = this._childMap.get(root.uuid);
+    if (!got) throw new Error("no children");
+    for (const child of got.keys()) {
       if (!child.shouldEnter(simContext)) continue;
       if (child.isAlreadyCompleted(simContext)) continue;
       const copiedContext = { ...simContext };
