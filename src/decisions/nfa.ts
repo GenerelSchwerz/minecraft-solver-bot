@@ -84,6 +84,14 @@ export class NewLogicPath<C, SC> {
     return this._cost;
   }
 
+  get last() {
+    return this._nodes[this._nodes.length - 1];
+  }
+
+  get first() {
+    return this._nodes[0];
+  }
+
   /**
    * Format node path into: "node1 -> node2 -> node3"
    * If node repeats, replace with "node1 -> node2 x(# of times repeated) -> node3"
@@ -96,6 +104,20 @@ export class NewLogicPath<C, SC> {
     //   return count > 1 ? `${n} x${count}` : n;
     // });
     return nodeNames.join(" ->");
+  }
+
+  next(logicNode: LogicNode<C, SC>) {
+    const index = this._nodes.indexOf(logicNode);
+    if (index === -1) throw new Error("node not in path");
+    if (index === this._nodes.length - 1) throw new Error("no next node");
+    return this._nodes[index + 1];
+  }
+
+  previous(logicNode: LogicNode<C, SC>) {
+    const index = this._nodes.indexOf(logicNode);
+    if (index === -1) throw new Error("node not in path");
+    if (index === 0) throw new Error("no previous node");
+    return this._nodes[index - 1];
   }
 }
 
@@ -310,7 +332,7 @@ export class WeightedNFAPlanner<C, SC> {
 
   fastplan(simContext: SC, amt: number) {
     const paths = this._fastplan(this._root, simContext, this._end, amt);
-    return paths
+    return paths;
     // return paths.map((p) => this.postFastPlan(p, {...simContext}));
   }
 
@@ -326,7 +348,6 @@ export class WeightedNFAPlanner<C, SC> {
   ): NewLogicPath<C, SC>[] {
     if (done.amt >= amt) return [];
 
-
     if (depth >= this.maxDepth) return [];
 
     let addCost;
@@ -338,7 +359,6 @@ export class WeightedNFAPlanner<C, SC> {
     } else {
       return [];
     }
-
 
     if (done.amt < amt && root === end) {
       done.amt++;
@@ -365,8 +385,9 @@ export class WeightedNFAPlanner<C, SC> {
   }
 
   postFastPlan(path: NewLogicPath<C, SC>, simContext: SC) {
-
-    const getSC = () => { return { ...simContext } };
+    const getSC = () => {
+      return { ...simContext };
+    };
     const nodes = [...path.nodes];
     const cpSC = getSC();
 
@@ -463,5 +484,181 @@ export class WeightedNFAPlanner<C, SC> {
     }
 
     return loops;
+  }
+}
+
+export interface WeightedNFAHandlerEvents {
+  enter: (node: LogicNode) => void;
+  exit: (node: LogicNode) => void;
+  complete: (node: LogicNode) => void;
+  failed: (node: LogicNode) => void;
+  interrupt: (node: LogicNode) => void;
+}
+
+export class WeightedNFAHandler<Context = unknown, SimContext = unknown> {
+  private readonly _root: LogicNode<Context, SimContext>;
+  private readonly _end: LogicNode<Context, SimContext>;
+  private readonly _interrupt: LogicNode<Context, SimContext>;
+  private _planner: WeightedNFAPlanner<Context, SimContext>;
+
+  private _currentPath?: NewLogicPath<Context, SimContext>;
+  private _currentNode?: LogicNode<Context, SimContext>;
+  private _prevNode?: LogicNode<Context, SimContext>;
+
+  private readonly context: Context;
+  private readonly simContext: SimContext;
+  private readonly simContextLive: SimContext;
+
+  private readonly fastPlanning: boolean;
+
+  constructor(
+    root: LogicNode<Context, SimContext>,
+    end: LogicNode<Context, SimContext>,
+    interrupt: LogicNode<Context, SimContext>,
+    context: Context,
+    simContext: SimContext,
+    opts: { fast?: boolean; maxDepth?: number; autosort?: boolean } = {}
+  ) {
+    this._root = root;
+    this._end = end;
+    this._interrupt = interrupt;
+
+    this.context = context;
+    this.simContext = simContext;
+    this.simContextLive = { ...simContext };
+    this.fastPlanning = opts.fast ?? false;
+    this._planner = new WeightedNFAPlanner(this._root, this._end, opts.maxDepth, opts.autosort);
+  }
+
+  get currentPath() {
+    return this._currentPath;
+  }
+
+  get cost() {
+    return this._currentPath?.cost ?? -1;
+  }
+
+  get done() {
+    if (!this._currentPath) return true;
+    if (this._currentPath.nodes.length === 0) return true;
+    return this._currentNode !== this._end;
+  }
+
+  get handlingInterrupt() {
+    return this._currentNode === this._interrupt;
+  }
+
+  clear() {
+    delete this._currentPath;
+  }
+
+  enterNode(node: LogicNode<Context, SimContext>) {
+    if (!this._currentPath) throw new Error("no current path");
+    if (this._currentNode) this.exitNode(this._currentNode);
+    this._currentNode = node;
+
+    if (!node.isAlreadyCompleted(this.simContextLive)) {
+      this._currentNode.simEnter?.(this.simContextLive);
+      this._currentNode.onEnter?.(this.context);
+    }
+    this._currentNode.emit("entered");
+  }
+
+  exitNode(node: LogicNode<Context, SimContext>) {
+    if (this._currentNode !== node) throw new Error("not in node");
+    if (!this._currentPath) throw new Error("no current path");
+    if (!node.isAlreadyCompleted(this.simContextLive)) {
+      node.simExit?.(this.simContextLive);
+      node.onExit?.(this.context);
+    }
+    
+    node.emit("exited");
+
+    this._prevNode = node;
+  }
+
+  interruptUpdate() {
+    if (this.done) return;
+    if (this._currentNode !== this._interrupt) throw new Error("not in interrupt node");
+
+    if (this._currentNode.isInterrupted()) {
+      this.exitNode(this._currentNode);
+      this.clear();
+      throw new Error("interrupt node interrupted");
+    }
+
+    if (this._currentNode.isFailed()) {
+      this.exitNode(this._currentNode);
+      this.clear();
+      throw new Error("interrupt node failed");
+    }
+
+    if (this._currentNode.isFinished()) {
+      if (!this._prevNode) throw new Error("no previous node");
+      this.enterNode(this._prevNode);
+      return;
+    }
+  }
+
+  update() {
+    if (this.done) return;
+
+    if (this.handlingInterrupt) {
+      this.interruptUpdate();
+      return;
+    }
+
+    if (!this._currentPath) {
+      let paths;
+      if (this.fastPlanning) {
+        paths = this._planner.fastplan(this.simContext, 1);
+        paths = paths.map((p) => this._planner.postFastPlan(p, this.simContext));
+      } else {
+        paths = this._planner.plan(this.simContext);
+      }
+
+      if (paths.length === 0) {
+        delete this._currentPath;
+        return;
+      }
+      this._currentPath = this._planner.bestPlan(paths);
+      this._currentNode = this._currentPath.nodes[0];
+      this.enterNode(this._currentNode);
+      return;
+    }
+
+    if (!this._currentNode) throw new Error("no current node");
+
+    if (this._currentNode.isInterrupted()) {
+      this.enterNode(this._interrupt);
+      return;
+    }
+
+    if (this._currentNode.isFinished()) {
+      if (this._currentNode === this._end) {
+        this.exitNode(this._currentNode);
+        this.clear();
+        return;
+      }
+
+      const nextNode = this._currentPath.next(this._currentNode);
+
+      this.enterNode(nextNode);
+      return;
+    }
+
+    /**
+     * Can implement recalculation or sticking to path here.
+     * For right now, stick with given path.
+     */
+    if (this._currentNode.isFailed()) {
+      if (this._currentNode === this._root) {
+        this.exitNode(this._currentNode);
+        throw new Error("root node failed");
+      }
+      const prevNode = this._currentPath.previous(this._currentNode);
+      this.enterNode(prevNode);
+      return;
+    }
   }
 }

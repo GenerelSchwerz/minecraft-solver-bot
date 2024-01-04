@@ -421,9 +421,8 @@ craftSticksNode.addChildren(
   craftDiamondAxeNode
 );
 craftFurnaceNode.addChildren(smeltIronNode);
-smeltIronNode.addChildren(collectWoodNode, craftIronPickaxeNode);
+smeltIronNode.addChildren(entryNode);
 
-const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, 35, true);
 
 const test1: SimContext = {
   wood: 0,
@@ -435,7 +434,7 @@ const test1: SimContext = {
   ironOre: 0,
   ironPickaxe: 0,
   furnace: 0,
-  iron: 2,
+  iron: 1,
   stonePickaxe: 0,
   sticks: 0,
   diamonds: 0,
@@ -443,6 +442,9 @@ const test1: SimContext = {
   diamondAxe: 0,
   ironAxe: 0,
 };
+
+const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, 35, true);
+
 
 function normalPlan() {
   let plans;
@@ -460,7 +462,7 @@ function normalPlan() {
 
 function fastPlan() {
   const start0 = performance.now();
-  const paths = planner.fastplan(test1, 10);
+  const paths = planner.fastplan(test1, 1);
   const end0 = performance.now();
 
   console.log(paths.length, "possible paths", paths.map((p) => p.cost));
