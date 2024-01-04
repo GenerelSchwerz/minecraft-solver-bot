@@ -1,15 +1,15 @@
 import { v4 } from "uuid";
+import { StrictEventEmitter } from "strict-event-emitter-types";
+import { EventEmitter } from "events";
 
 function isSubClassOf<T extends new (...args: any[]) => any>(child: T, parent: T) {
   return child === parent && child.prototype instanceof parent;
 }
 
-export function linkNodes(...nodes: LogicNode[]) {
-  for (const node of nodes) {
-    for (const child of node.children) {
-      child.addParents(node);
-    }
-    linkNodes(...node.children);
+export function linkNodes(node: LogicNode) {
+  for (const child of node.children) {
+    child.addParents(node);
+    linkNodes(child);
   }
 }
 
@@ -24,6 +24,11 @@ export function findPathsToBeginning(
     paths.push(path);
     return [];
   }
+  if (path.indexOf(endNode) !== path.lastIndexOf(endNode)) {
+    paths.push(path);
+    return [];
+  }
+
   for (const child of endNode.parents) {
     findPathsToBeginning(child, stopIf, paths, [...path]);
   }
@@ -41,54 +46,101 @@ export function findPathsToEnd(
     paths.push(path);
     return [];
   }
+
+  if (path.indexOf(endNode) !== path.lastIndexOf(endNode)) {
+    paths.push(path);
+    return [];
+  }
+
   for (const child of endNode.children) {
     findPathsToEnd(child, stopIf, paths, [...path]);
   }
   return paths;
 }
 
-export abstract class LogicNode<Context = unknown> {
-  public readonly uuid = v4();
+interface LogicEvents {
+  interrupted: () => void;
+  failed: () => void;
+  entered: () => void;
+  exited: () => void;
+}
 
+export abstract class LogicNode<Context = unknown, SimContext = unknown> extends (EventEmitter as new () => StrictEventEmitter<
+  EventEmitter,
+  LogicEvents
+>) {
   abstract name: string;
 
-  abstract get cost(): number;
+  private _cachedCost: number = -1;
 
-  public get staticRef(): typeof LogicNode {
-    return this.constructor as typeof LogicNode;
+  public get cachedCost(): number {
+    return this._cachedCost;
   }
 
-  readonly children: LogicNode[] = [];
+  public get calculated(): boolean {
+    return this._cachedCost !== -1;
+  }
 
-  readonly parents: LogicNode[] = [];
+  public readonly immediateReturn: boolean = false;
 
-  addParents(...parents: LogicNode[]) {
+  cleanup?: () => void
+
+  _clearCost() {
+    this._cachedCost = -1;
+  }
+
+  // abstract get cost(): number;
+
+  _calculateCost(ctx: SimContext): number {
+    this._cachedCost = this.calculateCost(ctx);
+    return this._cachedCost;
+  }
+
+
+
+  protected calculateCost(ctx: SimContext): number {
+    return 0;
+  }
+
+  simInit?(ctx: SimContext): void;
+
+  simEnter?(ctx: SimContext): void;
+
+  simExit?(ctx: SimContext): void;
+
+  onEnter?(ctx: Context): void;
+
+  onExit?(ctx: Context): void;
+
+  public readonly uuid = v4();
+
+  children: LogicNode<Context,SimContext>[] = [];
+
+  readonly parents: LogicNode<Context, SimContext>[] = [];
+
+  addParents(...parents: LogicNode<Context, SimContext>[]) {
     for (const parent of parents) {
       if (this.parents.includes(parent)) return; // already added, prevent multiple if already specified.
       this.parents.push(parent);
+      parent.addChildren(this)
     }
   }
 
-  addChildren(...children: LogicNode[]) {
+  addChildren(...children: LogicNode<Context, SimContext>[]) {
     for (const child of children) {
       if (this.children.includes(child)) return; // already added, prevent multiple if already specified.
       this.children.push(child);
+      child.addParents(this)
     }
   }
 
-  isCompleted(ctx: Context): boolean {
-    return true;
+  isAlreadyCompleted(ctx: SimContext): boolean {
+    return false;
   }
 
-  shouldConsider(ctx: Context): boolean {
+  shouldEnter(ctx: SimContext): boolean {
     return true;
   }
-
-  abstract calculateCost(ctx: Context): void;
-
-  abstract onEnter?(): void;
-
-  abstract onExit?(): void;
 
   isFinished(): boolean {
     return true;
@@ -103,29 +155,38 @@ export abstract class LogicNode<Context = unknown> {
   }
 }
 
-export class LogicGraph<Context = unknown> {
-  public runningNode: LogicNode<Context>;
-  private nodes: LogicNode<Context>[];
-  private visitedNodes: LogicNode<Context>[];
+export class LogicGraph<Context = unknown, SimContext = unknown> {
+  public runningNode: LogicNode<Context, SimContext>;
+  private nodes: LogicNode<Context, SimContext>[];
+  private visitedNodes: LogicNode<Context, SimContext>[];
 
   private handlingInterruption = false;
 
   #isComplete = false;
   #ctx: Context;
+  #simCtx: SimContext;
 
   protected constructor(
     ctx: Context,
-    private childrenMap: Map<LogicNode<Context>, LogicNode<Context>[]>,
-    private rootNode: LogicNode<Context>,
-    private interruptNode: LogicNode<Context>
+    simCtx: SimContext,
+    private childrenMap: Map<LogicNode<Context, SimContext>, LogicNode<Context, SimContext>[]>,
+    private rootNode: LogicNode<Context, SimContext>,
+    private interruptNode: LogicNode<Context, SimContext>
   ) {
     this.#ctx = ctx;
+    this.#simCtx = simCtx;
     this.runningNode = rootNode;
     this.visitedNodes = [];
     this.nodes = this.extractNodes(childrenMap);
   }
 
-  static fromTo<Context = unknown>(ctx: Context, from: LogicNode<Context>, to: LogicNode<Context>, interrupt: LogicNode<Context>) {
+  static fromTo<Context = unknown, SimContext = unknown>(
+    ctx: Context,
+    simCtx: SimContext,
+    from: LogicNode<Context, SimContext>,
+    to: LogicNode<Context, SimContext>,
+    interrupt: LogicNode<Context, SimContext>
+  ) {
     const paths = findPathsToBeginning(to, (node) => node === to)!;
 
     const mapping: Map<LogicNode, LogicNode[]> = new Map();
@@ -142,10 +203,15 @@ export class LogicGraph<Context = unknown> {
     }
     // console.log(paths)
     // console.log(mapping)
-    return new LogicGraph<Context>(ctx, mapping, from, interrupt);
+    return new LogicGraph<Context, SimContext>(ctx, simCtx, mapping, from, interrupt);
   }
 
-  static rootTree<Context = unknown>(ctx: Context, root: LogicNode<Context>, interrupt: LogicNode<Context>) {
+  static rootTree<Context = unknown, SimContext = unknown>(
+    ctx: Context,
+    simCtx: SimContext,
+    root: LogicNode<Context, SimContext>,
+    interrupt: LogicNode<Context, SimContext>
+  ) {
     const mapping = new Map();
     const loop = (root: LogicNode) => {
       mapping.set(root, root.children);
@@ -155,7 +221,7 @@ export class LogicGraph<Context = unknown> {
     };
 
     loop(root);
-    return new LogicGraph<Context>(ctx, mapping, root, interrupt);
+    return new LogicGraph<Context, SimContext>(ctx, simCtx, mapping, root, interrupt);
   }
 
   public get isComplete() {
@@ -180,19 +246,19 @@ export class LogicGraph<Context = unknown> {
 
   updateCosts(nodes = this.nodes) {
     for (const node of nodes) {
-      node.calculateCost(this.#ctx);
+      node._calculateCost(this.#simCtx);
     }
   }
 
   getLowestCostNode(nodes = this.nodes): LogicNode {
-    return nodes.reduce((lowestCostNode, node) => (node.cost < lowestCostNode.cost ? node : lowestCostNode), nodes[0]);
+    return nodes.reduce((lowestCostNode, node) => (node.cachedCost < lowestCostNode.cachedCost ? node : lowestCostNode), nodes[0]);
   }
 
   enterNode(node: LogicNode) {
-    this.runningNode.onExit?.();
+    this.runningNode.onExit?.(this.#ctx);
     this.visitedNodes.push(this.runningNode);
     this.runningNode = node;
-    node.onEnter?.();
+    node.onEnter?.(this.#ctx);
   }
 
   /**
@@ -202,10 +268,10 @@ export class LogicGraph<Context = unknown> {
    * TODO: Fix potential bug issue of hard stalling if root fails.
    */
   enterPreviousNode() {
-    this.runningNode.onExit?.();
+    this.runningNode.onExit?.(this.#ctx);
     const node = this.visitedNodes.pop() || this.rootNode;
     this.runningNode = node;
-    node.onEnter?.();
+    node.onEnter?.(this.#ctx);
   }
 
   interruptUpdate() {
@@ -250,7 +316,7 @@ export class LogicGraph<Context = unknown> {
 
       if (!children || children.length === 0) {
         this.#isComplete = true;
-        this.runningNode.onExit?.();
+        this.runningNode.onExit?.(this.#ctx);
         console.log("completed");
         return;
       }
@@ -262,47 +328,66 @@ export class LogicGraph<Context = unknown> {
   }
 }
 
-export class LogicPath<Context = unknown> {
-  #internal: LogicNode<Context>[];
-  #current: LogicNode<Context>;
+export class LogicPath<Context = unknown, SimContext = unknown> {
+  #internal: LogicNode<Context, SimContext>[];
+  #current: LogicNode<Context, SimContext>;
 
   // pre-calc for speed
   #indexes: Record<string, number> = {};
   #ctx: Context;
+  #simCtx: SimContext;
 
-  constructor(ctx: Context, internal: LogicNode<Context>[], current = internal[0]) {
+  constructor(ctx: Context, simCtx: SimContext, internal: LogicNode<Context, SimContext>[], current = internal[0]) {
     this.#internal = internal;
     this.#current = current;
     this.#ctx = ctx;
+    this.#simCtx = simCtx;
 
     this.initIndexes();
   }
 
-  static fromList<Context = unknown>(ctx: Context, nodes: LogicNode<Context>[]) {
-    return new LogicPath<Context>(ctx, nodes);
+  static fromList<Context = unknown, SimContext = unknown>(ctx: Context, simCtx: SimContext, nodes: LogicNode<Context, SimContext>[]) {
+    return new LogicPath<Context, SimContext>(ctx, simCtx, nodes);
   }
 
   public get completed(): boolean {
     return this.#indexes[this.#current.uuid] === this.#internal.length - 1;
   }
 
-  public get current(): LogicNode<Context> {
+  public get current(): LogicNode<Context, SimContext> {
     return this.#current;
   }
 
-  public get end(): LogicNode<Context> {
+  public get nodes(): LogicNode<Context, SimContext>[] {
+    return this.#internal;
+  }
+
+  public get next(): LogicNode<Context, SimContext> {
+    if (this.completed) throw new Error("LogicPath: Cannot get next, path is completed.");
+    return this.#internal[this.#indexes[this.#current.uuid] + 1];
+  }
+
+  public get end(): LogicNode<Context, SimContext> {
     return this.#internal[this.#internal.length - 1];
   }
 
-  has(node: LogicNode<Context>): boolean {
+  public get ctx(): Context {
+    return this.#ctx;
+  }
+
+  public get simCtx(): SimContext {
+    return this.#simCtx;
+  }
+
+  has(node: LogicNode<Context, SimContext>): boolean {
     return this.#indexes[node.uuid] !== undefined;
   }
 
-  sublist(start: LogicNode<Context>): LogicPath<Context> {
+  sublist(start: LogicNode<Context, SimContext>): LogicPath<Context, SimContext> {
     if (this.#indexes[start.uuid] === undefined) throw new Error("LogicPath: Cannot create sublist, start node is not in path.");
-    if (this.#indexes[start.uuid] === 0) return this;
+    // if (this.#indexes[start.uuid] === 0) return this;
     const nodes = this.#internal.slice(this.#indexes[start.uuid]);
-    return new LogicPath(this.#ctx, nodes, start);
+    return new LogicPath(this.#ctx, this.#simCtx, nodes, start);
   }
 
   initIndexes(): void {
@@ -314,13 +399,30 @@ export class LogicPath<Context = unknown> {
 
   getCost(): number {
     let cost = 0;
+    
+    const simCtx = structuredClone(this.#simCtx);
     for (let i = this.#indexes[this.#current.uuid]; i < this.#internal.length; i++) {
       const node = this.#internal[i];
-      if (node.isCompleted(this.#ctx)) continue;
+      if (node.isAlreadyCompleted(this.#simCtx)) continue;
+      node.simInit?.(this.simCtx)
 
-      // if not is not considered, its children will not be, so break.
-      if (!node.shouldConsider(this.#ctx)) break;
-      cost += node.cost;
+    }
+
+    for (let i = this.#indexes[this.#current.uuid]; i < this.#internal.length; i++) {
+      const node = this.#internal[i];
+      if (node.isAlreadyCompleted(this.#simCtx)) continue;
+
+      node.simEnter?.(simCtx)
+
+      
+      if (!node.shouldEnter(simCtx)) {
+        // console.log("not considering", node.name);
+        return Infinity;
+      }
+
+      cost += node.cachedCost;
+
+      node.simExit?.(simCtx);
     }
     return cost;
   }
@@ -328,26 +430,51 @@ export class LogicPath<Context = unknown> {
   getStepBackCost(): number {
     if (this.#indexes[this.#current.uuid] === 0) throw new Error("LogicPath: Cannot get step back cost, already at beginning.");
     const prevNode = this.#internal[this.#indexes[this.#current.uuid] - 1];
-    if (prevNode.isCompleted(this.#ctx)) return 0;
-    return prevNode.cost;
+    if (prevNode.isAlreadyCompleted(this.#simCtx)) return 0;
+    return prevNode.cachedCost;
   }
 
-  calculateCosts(): void {
+  calculateCosts(): number {
+    let cost = 0;
+
+    const simCtx = structuredClone(this.#simCtx);
+
     for (let i = this.#indexes[this.#current.uuid]; i < this.#internal.length; i++) {
       const node = this.#internal[i];
-      if (node.isCompleted(this.#ctx)) continue;
+      if (node.isAlreadyCompleted(this.#simCtx)) continue;
+      node.simInit?.(this.simCtx)
+
+    }
+
+    for (let i = this.#indexes[this.#current.uuid] + 1; i < this.#internal.length; i++) {
+      const node = this.#internal[i];
+      if (node.isAlreadyCompleted(simCtx)) {
+        // console.log("already completed", node.name);
+        continue;
+      }
+
+      node.simEnter?.(simCtx)
+
+      if (!node.shouldEnter(simCtx)) {
+        // console.log("not considering", node.name);
+        return Infinity;
+      }
+
 
       // if not is not considered, its children will not be, so break.
-      if (!node.shouldConsider(this.#ctx)) break;
-      node.calculateCost(this.#ctx);
+      
+      cost += node._calculateCost(simCtx);
+      node.simExit?.(simCtx);
+      // console.log("adding cost", node.name, node.cachedCost);
     }
+    return cost;
   }
 
   calculateStepBackCost(): void {
     if (this.#indexes[this.#current.uuid] === 0) throw new Error("LogicPath: Cannot calculate step back cost, already at beginning.");
     const prevNode = this.#internal[this.#indexes[this.#current.uuid] - 1];
-    if (prevNode.isCompleted(this.#ctx)) return;
-    prevNode.calculateCost(this.#ctx);
+    if (prevNode.isAlreadyCompleted(this.#simCtx)) return;
+    prevNode._calculateCost(this.#simCtx);
   }
 
   moveForward(): void {
@@ -361,16 +488,16 @@ export class LogicPath<Context = unknown> {
   }
 }
 
-export class LogicPathGraph<Context = unknown> {
-  #paths: LogicPath<Context>[];
-  #currentNode: LogicNode<Context>;
-  #interruptNode: LogicNode<Context>;
-  #currentPath?: LogicPath<Context>;
-  #visited: LogicNode<Context>[] = [];
+export class LogicPathGraph<Context = unknown, SimContext = unknown> {
+  #paths: LogicPath<Context, SimContext>[];
+  #currentNode: LogicNode<Context, SimContext>;
+  #interruptNode: LogicNode<Context, SimContext>;
+  #currentPath: LogicPath<Context, SimContext>;
+  #visited: LogicNode<Context, SimContext>[] = [];
 
   #handlingInterruption = false;
 
-  constructor(paths: LogicPath<Context>[], interruptNode: LogicNode<Context>) {
+  constructor(paths: LogicPath<Context, SimContext>[], interruptNode: LogicNode<Context, SimContext>) {
     if (paths.length === 0) throw new Error("LogicPathGraph: Cannot create graph with no paths.");
     const start = paths[0].current; // should be 0
     for (const path of paths)
@@ -382,6 +509,8 @@ export class LogicPathGraph<Context = unknown> {
     this.#paths = paths;
     this.#currentNode = start;
     this.#interruptNode = interruptNode;
+
+    this.#currentPath = this.selectPath();
   }
 
   public get runningNode() {
@@ -396,15 +525,44 @@ export class LogicPathGraph<Context = unknown> {
     return this.#currentPath?.completed;
   }
 
-  private considerPaths(): LogicPath<Context>[] {
-    return this.#paths.filter((path) => path.has(this.#currentNode)).map((p) => p.sublist(this.#currentNode));
+  private get currentCtx() {
+    return this.#currentPath?.ctx;
   }
 
-  private enterNode(node: LogicNode<Context>) {
-    this.#currentNode.onExit?.();
+  // public begin() {
+  //   this.enterNode(this.#currentNode)
+  // }
+
+  private considerPaths(): LogicPath<Context, SimContext>[] {
+    return this.#paths
+      .filter((path) => path.has(this.#currentNode))
+      .map((p) => p.sublist(this.#currentNode))
+      .filter((p) => p.next.shouldEnter(p.simCtx));
+  }
+
+  private enterNode(node: LogicNode<Context, SimContext>) {
+    
+    this.#currentNode.onExit?.(this.currentCtx!);
     this.#visited.push(this.#currentNode);
+    this.#currentNode.cleanup?.()
+
     this.#currentNode = node;
-    node.onEnter?.();
+    
+    // const failFn = this.failHandler.bind(this, node)
+    // const interFn = this.interruptHandler.bind(this, node)
+    // const exitFn = this.exitHandler.bind(this, node)
+    // const cleanup =  () => {
+    //   node.off('failed', failFn)
+    //   node.off('interrupted', interFn)
+    //   node.off('exited', exitFn)
+
+    // }
+    // node.once('failed', failFn)
+    // node.once('interrupted', interFn)
+    // node.once('exited', exitFn)
+    // node.cleanup = cleanup
+
+    node.onEnter?.(this.currentCtx!);
   }
 
   /**
@@ -412,11 +570,12 @@ export class LogicPathGraph<Context = unknown> {
    * If there is no previous node, error.
    */
   enterPreviousNode() {
-    this.#currentNode.onExit?.();
+    this.#currentNode.onExit?.(this.currentCtx!);
     const node = this.#visited.pop();
+    // console.log(this.#currentNode.name, node?.name)
     if (!node) throw new Error("LogicPathGraph: Cannot enter previous node, no previous node.");
     this.#currentNode = node;
-    node.onEnter?.();
+    node.onEnter?.(this.currentCtx!);
   }
 
   interruptUpdate() {
@@ -434,6 +593,71 @@ export class LogicPathGraph<Context = unknown> {
     }
   }
 
+  updateCosts() {
+    for (const path of this.#paths) {
+      path.calculateCosts();
+    }
+  }
+
+  selectPath() {
+    const paths = this.considerPaths();
+    if (paths.length === 0) throw new Error("LogicPathGraph: Cannot select path, no paths to consider.");
+    const costs = paths.map((p) => p.calculateCosts());
+    const lowestCost = Math.min(...costs);
+    return paths[costs.indexOf(lowestCost)];
+  }
+
+
+  interruptHandler = (node: LogicNode) => {
+
+  }
+
+  failHandler = (node: LogicNode) => {
+
+  }
+
+  exitHandler = (node: LogicNode) => {
+    if (this.#currentPath.completed) {
+      console.log("completed path");
+      return;
+    }
+
+    this.#currentPath.current.simExit?.(this.#currentPath.simCtx);
+    const costs = [];
+    const subPaths = [];
+    for (const path of this.#paths) {
+      if (!path.has(this.#currentNode)) {
+        costs.push(Infinity);
+        subPaths.push(path);
+        continue;
+      }
+      
+      const subPath = path.sublist(this.#currentNode);
+      const cost = subPath.calculateCosts();
+      costs.push(cost);
+      subPaths.push(subPath);
+    }
+
+    for (const cost of costs) {
+      console.log(
+        cost,
+        subPaths[costs.indexOf(cost)].nodes.map((n) => n.name)
+      );
+    }
+    // console.log(costs, subPaths.map(p=>p.nodes.map(n=>n.name)));
+    const lowestCost = Math.min(...costs);
+    const currentSubPath = subPaths[costs.indexOf(lowestCost)];
+    this.#currentPath = this.#paths[costs.indexOf(lowestCost)];
+    const entering = currentSubPath.next;
+
+    if (entering.shouldEnter(currentSubPath.simCtx)) {
+      this.#currentPath.moveForward();
+      this.enterNode(entering);
+    } else {
+      this.enterNode(this.#currentNode);
+    }
+  };
+
   update() {
     if (this.#currentPath?.completed) {
       console.log("completed");
@@ -445,6 +669,8 @@ export class LogicPathGraph<Context = unknown> {
       return;
     }
 
+    console.log("updating", this.#currentNode.name);
+
     if (this.#currentNode.isInterrupted()) {
       this.#handlingInterruption = true;
       this.enterNode(this.#interruptNode);
@@ -453,18 +679,45 @@ export class LogicPathGraph<Context = unknown> {
     // .
     else if (this.#currentNode.isFailed()) {
       console.log(`failed, reverting from ${this.#currentNode.name} to ${this.previousNode.name}`);
+      this.#currentPath?.moveBackward();
       this.enterPreviousNode();
     }
 
     // .
     else if (this.#currentNode.isFinished()) {
-      const paths = this.considerPaths();
-      const costs = paths.map((path) => path.getCost());
-      const lowestCost = Math.min(...costs);
-      this.#currentPath = this.#paths[costs.indexOf(lowestCost)];
+      this.#currentPath.current.simExit?.(this.#currentPath.simCtx);
+      const costs = [];
+      const subPaths = [];
+      for (const path of this.#paths) {
+        if (!path.has(this.#currentNode)) {
+          costs.push(Infinity);
+          subPaths.push(path);
+          continue;
+        }
+        const subPath = path.sublist(this.#currentNode);
+        const cost = subPath.calculateCosts();
+        costs.push(cost);
+        subPaths.push(subPath);
+      }
 
-      this.#currentPath.moveForward();
-      this.enterNode(this.#currentPath.current);
+      for (const cost of costs) {
+        console.log(
+          cost,
+          subPaths[costs.indexOf(cost)].nodes.map((n) => n.name)
+        );
+      }
+      // console.log(costs, subPaths.map(p=>p.nodes.map(n=>n.name)));
+      const lowestCost = Math.min(...costs);
+      const currentSubPath = subPaths[costs.indexOf(lowestCost)];
+      this.#currentPath = this.#paths[costs.indexOf(lowestCost)];
+      const entering = currentSubPath.next;
+
+      if (entering.shouldEnter(currentSubPath.simCtx)) {
+        this.#currentPath.moveForward();
+        this.enterNode(entering);
+      } else {
+        this.enterNode(this.#currentNode);
+      }
     }
   }
 }
