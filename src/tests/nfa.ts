@@ -194,9 +194,9 @@ class CraftStoneAxeNode extends Node {
     return ctx.stoneAxe > 0;
   }
 
-  shouldConsider(ctx: Context): boolean {
-      return false;
-  }
+  // shouldConsider(ctx: Context): boolean {
+  //     return false;
+  // }
 
   shouldEnter(ctx: SimContext): boolean {
     return ctx.sticks >= 2 && ctx.stone >= 3;
@@ -307,9 +307,9 @@ class CraftFurnaceNode extends Node {
     return ctx.furnace > 0;
   }
 
-  shouldConsider(ctx: Context): boolean {
-      return false;
-  }
+  // shouldConsider(ctx: Context): boolean {
+  //     return false;
+  // }
 
   shouldEnter(ctx: SimContext): boolean {
     return ctx.stone >= 8;
