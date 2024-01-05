@@ -55,6 +55,35 @@ function isPathAchievable<C, SC>(path: LogicNode<C, SC>[], simContext: SC): [boo
 }
 
 /**
+ *  Sort from bottom up to ensure that all children are sorted before parents.
+ *  Sort children, if child leads to target, that child is leftmost.
+ *  Otherwise, sort by its children length.
+ *
+ */
+function sortNodeChildren<C, SC>(target: LogicNode<C, SC>, root: LogicNode<C, SC>, context: C, simContext: SC, maxDepth:number, depth=0, seen = new Set()) {
+  if (depth >= maxDepth) return;
+  for (const child of root.children) {
+    if (child === target) continue;
+    if (seen.has(child)) continue;  
+    seen.add(child)
+    sortNodeChildren(target, child, context, simContext, maxDepth, depth + 1, seen);
+  }
+
+  // console.log('hi', depth)
+  const children = root.children;
+  children.sort((a, b) => {
+    if (a === target) return -1;
+    if (a === root) return -1;
+    if (a.isAlreadyCompleted(simContext)) return -1;
+    if (!a.shouldConsider(context)) return 1;
+    if (b === target) return 1;
+    if (b === root) return 1;
+    return b.children.length - a.children.length;
+  });
+
+}
+
+/**
  * The plan is to create a weighted NFA.
  *
  * The NFA will be a graph of nodes with context.
@@ -531,7 +560,11 @@ export class WeightedNFAPlanner<C, SC> {
       maxPartialPaths?: number;
     } = {}
   ) {
-    const maxDepth = this.maxDepth;
+
+
+    // sortNodeChildren(this._end, this._root, context, simContext, this.maxDepth);
+  
+    // console.log('done sorting!')
     const solveRec: { [key: number]: { lowestCost: number; keyNodeNum: number; success: boolean } } = {};
 
     for (let i = 0; i <= this.maxDepth; i++) {
@@ -649,6 +682,129 @@ export class WeightedNFAPlanner<C, SC> {
     }
     return paths;
   }
+
+
+
+
+  bestplanpartial2(
+    context: C,
+    simContext: SC,
+    options: {
+      maxSuccessPaths?: number;
+      maxPartialPaths?: number;
+    } = {
+      maxSuccessPaths: Infinity,
+      maxPartialPaths: Infinity,
+    }
+  ) {
+    const ref = {
+      c: context,
+      osc: { ...simContext },
+      amt: 0,
+      partialAmt: 0,
+      maxAmt: options.maxSuccessPaths ?? Infinity,
+      maxPartialAmt: options.maxPartialPaths ?? Infinity,
+      lowestSuccessCost: Infinity,
+      lowestShit: Infinity,
+      considerMap: new Map<LogicNode, boolean>(),
+    };
+
+    sortNodeChildren(this._end, this._root, context, simContext, this.maxDepth);
+    const paths = this._bestplanpartial2(this._root, simContext, this._end, ref);
+    return paths;
+    // return paths.map((p) => this.postProcess(p, {...simContext}));
+
+  }
+
+
+  /**
+   *  A new function with same functionality as _bestplanpartial
+   * but depth-first search instead of breadth-first search.
+   * 
+   */
+  _bestplanpartial2(
+    root: LogicNode<C, SC>,
+    simContext: SC,
+    end: LogicNode<C, SC>,
+    ref: {
+      c: C;
+      osc: SC;
+      amt: number;
+      partialAmt: number;
+      maxAmt: number;
+      maxPartialAmt: number;
+      lowestSuccessCost: number;
+      lowestShit: number;
+      considerMap: Map<LogicNode, boolean>;
+    },
+    path: LogicNode<C, SC>[] = [],
+    depth = 0,
+    cost = 0
+  ) {
+    if (depth >= this.maxDepth) return [];
+    if (ref.amt >= ref.maxAmt) return [];
+    if (ref.partialAmt >= ref.maxPartialAmt) return [];
+    if (cost >= ref.lowestSuccessCost) return [];
+    if (cost >= ref.lowestShit) return [];
+
+    if (!this._truncatedNodes.has(root)) return [];
+    if (ref.considerMap.get(root) === false) return [];
+
+    let consider = ref.considerMap.get(root);
+    if (consider === undefined) {
+      consider = root.shouldConsider(ref.c);
+      ref.considerMap.set(root, root.shouldConsider(ref.c));
+      if (consider === false) return [];
+    } else if (consider === false) return [];
+
+    let addCost;
+    if (root.isAlreadyCompleted(simContext)) {
+      addCost = 0;
+    } else if (root.shouldEnter(simContext)) {
+      root.simEnter?.(simContext);
+      addCost = root._calculateCost(simContext);
+      root.simExit?.(simContext);
+    } else {
+      return [];
+    }
+
+    if (root === end) {
+      ref.amt++;
+      ref.lowestSuccessCost = Math.min(ref.lowestSuccessCost, cost + addCost);
+      ref.lowestShit = Math.min(ref.lowestShit, path.length);
+      let retPath = new NewLogicPath(simContext, cost + addCost, path.length, ...path, root);
+      return [retPath];
+    }
+
+    const paths: NewLogicPath<C, SC>[] = [];
+    for (const child of root.children) {
+      if (!child._shouldEnter(simContext)) continue;
+
+      if (child === end) {
+        const path1 = this._bestplanpartial2(child, simContext, end, ref, [...path, root], depth + 1, cost + addCost);
+        if (path1.length === 0) continue;
+        paths.push(path1[0]);
+        return paths;
+      }
+
+      if (!this._truncatedNodes.has(child)) continue;
+      const consider = ref.considerMap.get(child);
+      if (consider === undefined) {
+        const val = root.shouldConsider(ref.c);
+        ref.considerMap.set(root, root.shouldConsider(ref.c));
+        if (val === false) continue;
+      } else if (consider === false) continue;
+
+      const copiedContext = { ...simContext };
+      child.simEnter?.(copiedContext);
+      const childPaths = this._bestplanpartial2(child, copiedContext, end, ref, [...path, root], depth + 1, cost + addCost);
+      for (const path of childPaths) {
+        paths.push(path);
+      }
+    }
+    return paths;
+  }
+
 
   postFastPlan(paths: NewLogicPath<C, SC>[], simContext: SC) {
     return paths.map((p) => this.postProcess(p, { ...simContext }));

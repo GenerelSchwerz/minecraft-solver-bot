@@ -471,7 +471,7 @@ let test1: SimContext = {
 //   ironAxe: 0,
 // }
 
-const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, 35, true);
+const planner = new WeightedNFAPlanner(entryNode, craftFurnaceNode, 35, true);
 
 
 function normalPlan() {

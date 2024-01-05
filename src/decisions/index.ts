@@ -154,8 +154,7 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
       this.children.splice(this.children.indexOf(target), 1);
       this.children.unshift(target);
     }
-    // this.children.sort((a, b) => Math.random() - Math.random());
-    // console.log(this.children.map((c) => c.name));
+
   }
 
   isAlreadyCompleted(ctx: SimContext): boolean {
