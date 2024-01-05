@@ -72,6 +72,7 @@ interface LogicEvents {
   failed: () => void;
   entered: () => void;
   exited: () => void;
+  cleanup: () => void;
 }
 
 export abstract class LogicNode<Context = unknown, SimContext = unknown> extends (EventEmitter as new () => StrictEventEmitter<

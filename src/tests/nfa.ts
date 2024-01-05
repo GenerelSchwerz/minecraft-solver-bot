@@ -194,6 +194,10 @@ class CraftStoneAxeNode extends Node {
     return ctx.stoneAxe > 0;
   }
 
+  shouldConsider(ctx: Context): boolean {
+      return false;
+  }
+
   shouldEnter(ctx: SimContext): boolean {
     return ctx.sticks >= 2 && ctx.stone >= 3;
   }
@@ -303,6 +307,10 @@ class CraftFurnaceNode extends Node {
     return ctx.furnace > 0;
   }
 
+  shouldConsider(ctx: Context): boolean {
+      return false;
+  }
+
   shouldEnter(ctx: SimContext): boolean {
     return ctx.stone >= 8;
   }
@@ -322,6 +330,7 @@ class SmeltIronNode extends Node {
     super();
     this.woodAmt = Math.ceil(amt / 4);
   }
+
 
   shouldEnter(ctx: SimContext): boolean {
     return ctx.wood >= this.woodAmt && ctx.ironOre >= this.amt && ctx.furnace > 0;
@@ -369,7 +378,6 @@ entryNode.addChildren(
   craftWoodenAxeNode,
   
   craftSticksNode,
-  craftFurnaceNode,
   collectDirtNode,
   collectStoneNode,
   collectWoodNode,
@@ -399,12 +407,12 @@ collectWoodNode.addChildren(
   
 );
 collectStoneNode.addChildren(collectStoneNode, craftFurnaceNode, craftStoneAxeNode, craftStonePickaxeNode);
-collectIronNode.addChildren( collectIronNode, craftFurnaceNode);
+collectIronNode.addChildren(collectIronNode, craftFurnaceNode);
 collectDiamondNode.addChildren(collectDiamondNode, craftDiamondPickaxeNode);
 craftWoodenAxeNode.addChildren(collectWoodNode);
 craftWoodenPickaxeNode.addChildren(collectStoneNode);
 craftStoneAxeNode.addChildren(collectWoodNode);
-craftStonePickaxeNode.addChildren(collectIronNode);
+craftStonePickaxeNode.addChildren(collectIronNode, craftFurnaceNode);
 craftIronPickaxeNode.addChildren(collectDiamondNode);
 craftIronAxeNode.addChildren(collectWoodNode);
 craftDiamondPickaxeNode.addChildren(collectDiamondNode);
@@ -421,27 +429,47 @@ craftSticksNode.addChildren(
   craftDiamondAxeNode
 );
 craftFurnaceNode.addChildren(smeltIronNode);
-smeltIronNode.addChildren(entryNode);
+smeltIronNode.addChildren(smeltIronNode, craftIronPickaxeNode);
 
 
-const test1: SimContext = {
-  wood: 0,
-  woodenAxe: 0,
-  stoneAxe: 0,
-  stone: 2,
-  woodenPickaxe: 0,
-  dirt: 0,
-  ironOre: 0,
-  ironPickaxe: 0,
-  furnace: 0,
-  iron: 1,
-  stonePickaxe: 0,
+let test1: SimContext = {
+  diamondAxe: 0,
+  ironAxe: 0,
   sticks: 0,
   diamonds: 0,
   diamondPickaxe: 0,
-  diamondAxe: 0,
-  ironAxe: 0,
-};
+  ironOre: 0,
+  ironPickaxe: 0,
+  furnace: 0,
+  iron: 0,
+  stonePickaxe: 0,
+  dirt: 0,
+  woodenPickaxe: 0,
+  stone: 0,
+  wood: 0,
+  woodenAxe: 0,
+  stoneAxe: 0
+}
+
+
+// test1 = {
+//   wood: 12,
+//   woodenAxe: 0,
+//   stoneAxe: 0,
+//   stone: 0,
+//   woodenPickaxe: 1,
+//   dirt: 0,
+//   ironOre: 0,
+//   ironPickaxe: 0,
+//   furnace: 1,
+//   iron: 0,
+//   stonePickaxe: 0,
+//   sticks: 6,
+//   diamonds: 0,
+//   diamondPickaxe: 0,
+//   diamondAxe: 0,
+//   ironAxe: 0,
+// }
 
 const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, 35, true);
 
@@ -449,38 +477,129 @@ const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, 35, t
 function normalPlan() {
   let plans;
   const start0 = performance.now();
+  const test1Copy = JSON.parse(JSON.stringify(test1));
   plans = planner.plan3(test0, test1);
   const end0 = performance.now();
 
-  console.log(plans.length, "possible plans");
+  console.log(plans.length, "plans considered");
   const bestPath = planner.bestPlan(plans);
+
 
   console.log("planning took", end0 - start0, "ms");
   console.log(bestPath.toBetterString());
   console.log(bestPath.cost, bestPath.simContext, bestPath.nodes.length);
+
+  console.log('post-processing not necessary.')
+  // const realBestPlan = planner.postProcess(bestPath, test1Copy);
+  // console.log(realBestPlan.toBetterString());
+  // console.log(realBestPlan.cost, realBestPlan.simContext);
+
 }
 
 function fastPlan() {
   const start0 = performance.now();
-  const paths = planner.fastplan(test1, 1);
+  const amt = Infinity
+  const costOffset = 0
+  const nodeOffset = 0
+  const paths = planner.fastplan(test0, test1, amt, costOffset, nodeOffset);
   const end0 = performance.now();
 
-  console.log(paths.length, "possible paths", paths.map((p) => p.cost));
-  const bestPath = planner.bestPlan(paths);
 
   console.log("fastplan took", end0 - start0, "ms");
-  console.log(bestPath.toBetterString());
-  console.log(bestPath.cost, bestPath.simContext);
+  console.log(paths.length, "possible paths");
+  const bestPath0 = planner.bestPlan(paths);
+  console.log(bestPath0.toBetterString());
+  console.log(bestPath0.cost, bestPath0.simContext, bestPath0.nodes.length);
+
+  if (amt === Infinity) {
+    console.log('post processing not necessary.')
+
+  } else {
+
+    const start1 = performance.now();
+    const processedPaths = planner.postFastPlan(paths, test1);
+    const end1 = performance.now();
+  
+    console.log("post-processing took", end1 - start1, "ms");
+  
+    const bestPath1 = planner.bestPlan(processedPaths);
+    console.log(bestPath1.toBetterString());
+    console.log(bestPath1.cost, bestPath1.simContext, bestPath1.nodes.length);
+
+  }
+}
+
+function fastPlan2() {
+  const start0 = performance.now();
+  const paths = planner.fastplan2(test0, test1);
+  const end0 = performance.now();
+
+
+  
+  console.log("fastplan2 took", end0 - start0, "ms");
+  console.log(paths.length, "possible paths");
+  const bestPath0 = planner.bestPlan(paths);
+  console.log(bestPath0.toBetterString());
+  console.log(bestPath0.cost, bestPath0.simContext);
 
   const start1 = performance.now();
-  const processedPath = planner.postFastPlan(bestPath, test1);
+  const processedPaths = planner.postFastPlan(paths, test1);
   const end1 = performance.now();
 
   console.log("post-processing took", end1 - start1, "ms");
 
-  console.log(processedPath.toBetterString());
-  console.log(processedPath.cost, processedPath.simContext);
+  const bestPath1 = planner.bestPlan(processedPaths);
+  console.log(bestPath1.toBetterString());
+  console.log(bestPath1.cost, bestPath1.simContext);
 }
 
-// normalPlan();
-fastPlan();
+
+function bestplanpartial() {
+  const start0 = performance.now();
+  const amt = Infinity
+  const costOffset = 0
+  const nodeOffset = 0
+  const opts = {
+    maxSuccessPaths: amt,
+    maxParialPaths: amt * 10
+  }
+  const getSC = () => {return {...test1}}
+  const paths = planner.bestplanpartial(test0, test1, opts);
+  const end0 = performance.now();
+
+
+  console.log("bestplanpartial took", end0 - start0, "ms");
+  console.log(paths.length, "possible paths");
+  const bestPath0 = planner.bestPlan(paths);
+  console.log(bestPath0.toBetterString());
+  console.log(bestPath0.cost, bestPath0.simContext, bestPath0.nodes.length, bestPath0.keyNodes);
+
+  if (amt === Infinity) {
+    console.log('post processing not necessary.')
+
+  } else {
+
+    const start1 = performance.now();
+    const processedPaths = planner.postFastPlan(paths, test1);
+    const end1 = performance.now();
+  
+    console.log("post-processing took", end1 - start1, "ms");
+  
+    const bestPath1 = planner.bestPlan(processedPaths);
+    console.log(bestPath1.toBetterString());
+    console.log(bestPath1.cost, bestPath1.simContext, bestPath1.nodes.length, bestPath1.keyNodes);
+
+  }
+}
+
+// bestplanpartial();
+
+normalPlan();
+console.log('dummy run')
+console.log('---------------------')
+// fastPlan();
+// console.log('---------------------')
+// fastPlan2();
+// console.log('---------------------')
+bestplanpartial();
+// fastPlan2();
