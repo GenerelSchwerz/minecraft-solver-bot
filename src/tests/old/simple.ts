@@ -1,5 +1,6 @@
-import { EntryNode, InterruptNode, TestNode } from ".";
-import { LogicGraph, LogicNode, LogicPath, LogicPathGraph, findPathsToBeginning, linkNodes } from "../decisions";
+import { EntryNode, InterruptNode, TestNode } from "..";
+import {  LogicNode, findPathsToBeginning, linkNodes } from "../../decisions";
+import { LogicGraph } from "../../decisions/old/old";
 
 function addRandomChildren(nodes: LogicNode[] | LogicNode, max_depth: number, children_num: number = 1, depth = 0) {
   if (max_depth <= depth) return;

@@ -1,7 +1,7 @@
 import { v4 } from "uuid";
 import { EventEmitter } from "events";
 import { StrictEventEmitter } from "strict-event-emitter-types";
-import { LogicNode, LogicPath, findAllChildren } from ".";
+import { LogicNode, findAllChildren } from ".";
 
 /**
  * Given a simulation context, return whether or not a path is achievable.

@@ -1,5 +1,8 @@
-import { EntryNode, InterruptNode, TestNode } from ".";
-import { LogicNode, LogicPath, LogicPathGraph, findPathsToBeginning, linkNodes } from "../decisions";
+//@ts-ignore
+
+import { EntryNode, InterruptNode, TestNode } from "..";
+import { LogicNode, findPathsToBeginning } from "../../decisions";
+import { LogicPath, LogicPathGraph } from "../../decisions/old/old";
 
 interface Context {
 }
@@ -86,8 +89,6 @@ collectWoodNode.addChildren(craftWoodenAxeNode, treeNode);
 craftWoodenAxeNode.addChildren(treeNode);
 
 
-
-linkNodes(entryNode);
 
 let paths: LogicNode<Context, SimContext>[][] = findPathsToBeginning(treeNode);
 

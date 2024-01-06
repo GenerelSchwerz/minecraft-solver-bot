@@ -455,24 +455,24 @@ let test1: SimContext = {
 }
 
 
-test1 = {
-  diamondAxe: 0,
-  ironAxe: 0,
-  sticks: 8,
-  diamonds: 0,
-  diamondPickaxe: 0,
-  ironOre: 0,
-  ironPickaxe: 0,
-  furnace: 0,
-  iron: 0,
-  stonePickaxe: 0,
-  dirt: 0,
-  woodenPickaxe: 0,
-  stone: 0,
-  wood: 0,
-  woodenAxe: 0,
-  stoneAxe: 0,
-}
+// test1 = {
+//   diamondAxe: 0,
+//   ironAxe: 0,
+//   sticks: 8,
+//   diamonds: 0,
+//   diamondPickaxe: 0,
+//   ironOre: 0,
+//   ironPickaxe: 0,
+//   furnace: 0,
+//   iron: 0,
+//   stonePickaxe: 0,
+//   dirt: 0,
+//   woodenPickaxe: 0,
+//   stone: 0,
+//   wood: 0,
+//   woodenAxe: 0,
+//   stoneAxe: 0,
+// }
 
 const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, 35);
 
