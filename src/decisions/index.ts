@@ -142,21 +142,6 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
     }
   }
 
-  /**
-   * Sort children by length, and prioritzing recursive children.
-   */
-  sortChildren(target: LogicNode<Context, SimContext>) {
-    this.children.sort(
-      (a, b) => a.children.length + (a.children.includes(this) ? -1000 : 0) - (b.children.length + (b.children.includes(this) ? -1000 : 0))
-    );
-
-    if (this.children.includes(target)) {
-      this.children.splice(this.children.indexOf(target), 1);
-      this.children.unshift(target);
-    }
-
-  }
-
   isAlreadyCompleted(ctx: SimContext): boolean {
     return false;
   }

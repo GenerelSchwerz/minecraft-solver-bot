@@ -65,7 +65,7 @@ class CollectStoneNode extends Node {
 
   calculateCost(ctx: SimContext): number {
     if (ctx.diamondPickaxe) return this.amt * 0.25;
-    if (ctx.ironPickaxe) return this.amt * 0.5;
+    if (ctx.ironPickaxe) return this.amt * 1;
     if (ctx.stonePickaxe) return this.amt * 4;
     if (ctx.woodenPickaxe) return this.amt * 16;
     return Infinity;
@@ -303,7 +303,6 @@ class CraftFurnaceNode extends Node {
   name = "craftFurnace";
 
   isAlreadyCompleted(ctx: SimContext): boolean {
-    // console.log('check!', ctx.furnace > 0)
     return ctx.furnace > 0;
   }
 
@@ -342,6 +341,8 @@ class SmeltIronNode extends Node {
     context.iron += this.amt;
   }
 }
+
+
 
 const entryNode = new EntryNode<Context, SimContext>();
 const interruptNode = new InterruptNode<Context, SimContext>();
@@ -383,6 +384,8 @@ entryNode.addChildren(
   collectWoodNode,
   collectIronNode,
   collectDiamondNode,
+
+  craftFurnaceNode
   
 );
 
@@ -428,8 +431,8 @@ craftSticksNode.addChildren(
   craftDiamondPickaxeNode,
   craftDiamondAxeNode
 );
-craftFurnaceNode.addChildren(smeltIronNode);
-smeltIronNode.addChildren(smeltIronNode, craftIronPickaxeNode);
+craftFurnaceNode.addChildren(collectIronNode, smeltIronNode);
+smeltIronNode.addChildren(smeltIronNode, craftIronPickaxeNode, craftIronAxeNode);
 
 
 let test1: SimContext = {
@@ -452,26 +455,26 @@ let test1: SimContext = {
 }
 
 
-// test1 = {
-//   wood: 12,
-//   woodenAxe: 0,
-//   stoneAxe: 0,
-//   stone: 0,
-//   woodenPickaxe: 1,
-//   dirt: 0,
-//   ironOre: 0,
-//   ironPickaxe: 0,
-//   furnace: 1,
-//   iron: 0,
-//   stonePickaxe: 0,
-//   sticks: 6,
-//   diamonds: 0,
-//   diamondPickaxe: 0,
-//   diamondAxe: 0,
-//   ironAxe: 0,
-// }
+test1 = {
+  diamondAxe: 0,
+  ironAxe: 0,
+  sticks: 8,
+  diamonds: 0,
+  diamondPickaxe: 0,
+  ironOre: 0,
+  ironPickaxe: 0,
+  furnace: 0,
+  iron: 0,
+  stonePickaxe: 0,
+  dirt: 0,
+  woodenPickaxe: 0,
+  stone: 0,
+  wood: 0,
+  woodenAxe: 0,
+  stoneAxe: 0,
+}
 
-const planner = new WeightedNFAPlanner(entryNode, craftFurnaceNode, 35, true);
+const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, 35);
 
 
 function normalPlan() {
@@ -482,10 +485,11 @@ function normalPlan() {
   const end0 = performance.now();
 
   console.log(plans.length, "plans considered");
-  const bestPath = planner.bestPlan(plans);
-
-
   console.log("planning took", end0 - start0, "ms");
+
+  if (plans.length === 0) return console.log('No paths discovered, not post processing.')
+
+  const bestPath = planner.bestPlan(plans);
   console.log(bestPath.toBetterString());
   console.log(bestPath.cost, bestPath.simContext, bestPath.nodes.length);
 
@@ -557,19 +561,26 @@ function fastPlan2() {
 function bestplanpartial() {
   const start0 = performance.now();
   const amt = Infinity
+  const partialAmt = Infinity
   const costOffset = 0
-  const nodeOffset = 0
+  const nodeOffset = Infinity
   const opts = {
     maxSuccessPaths: amt,
-    maxParialPaths: amt * 10
+    maxPartialPaths: partialAmt,
+    costOffset,
+    nodeOffset,
   }
   const getSC = () => {return {...test1}}
   const paths = planner.bestplanpartial(test0, test1, opts);
   const end0 = performance.now();
 
 
-  console.log("bestplanpartial took", end0 - start0, "ms");
+  console.log("bestplanpartial took", end0 - start0, "ms", paths.map(c=>c.cost));
   console.log(paths.length, "possible paths");
+
+  if (paths.length === 0) return console.log('No paths discovered, not post processing.')
+
+
   const bestPath0 = planner.bestPlan(paths);
   console.log(bestPath0.toBetterString());
   console.log(bestPath0.cost, bestPath0.simContext, bestPath0.nodes.length, bestPath0.keyNodes);
@@ -593,8 +604,10 @@ function bestplanpartial() {
 }
 
 // bestplanpartial();
-
-normalPlan();
+console.time('1secInterval')
+const interval = setInterval(() => console.log('1secInterval', 'hey'), 1000)
+console.log(interval)
+// normalPlan();
 console.log('dummy run')
 console.log('---------------------')
 // fastPlan();
@@ -602,4 +615,7 @@ console.log('---------------------')
 // fastPlan2();
 // console.log('---------------------')
 bestplanpartial();
+
+clearInterval(interval)
+console.timeEnd('1secInterval')
 // fastPlan2();

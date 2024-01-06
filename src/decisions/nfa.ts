@@ -29,15 +29,15 @@ function isPathAchievable<C, SC>(path: LogicNode<C, SC>[], simContext: SC): [boo
     if (node.isAlreadyCompleted(simContext)) {
       addCost = 0;
       completedIndexes.push(i);
+      // console.log('node', i, ', ', node.name, ': already completed')
     } else if (node.shouldEnter(simContext)) {
       node.simEnter?.(simContext);
       addCost = node._calculateCost(simContext);
-
-      if (addCost > 0) keyNodes++; 
+      // console.log('node', i, ', ', node.name, ': adding cost', addCost)
+      if (addCost > 0) keyNodes++;
     } else {
       return [false, Infinity, keyNodes, completedIndexes];
     }
-    // console.log('adding cost', addCost, 'for index', i, 'node', node.name)
     cost += addCost;
 
     prev = node;
@@ -60,29 +60,65 @@ function isPathAchievable<C, SC>(path: LogicNode<C, SC>[], simContext: SC): [boo
  *  Otherwise, sort by its children length.
  *
  */
-function sortNodeChildren<C, SC>(target: LogicNode<C, SC>, root: LogicNode<C, SC>, context: C, simContext: SC, maxDepth:number, depth=0, seen = new Set()) {
+function sortNodeChildren<C, SC>(
+  target: LogicNode<C, SC>,
+  root: LogicNode<C, SC>,
+  context: C,
+  simContext: SC,
+  maxDepth: number,
+  depth = 0,
+  seen = new Set()
+) {
   if (depth >= maxDepth) return;
   for (const child of root.children) {
     if (child === target) continue;
-    if (seen.has(child)) continue;  
-    seen.add(child)
+    if (seen.has(child)) continue;
+    seen.add(child);
     sortNodeChildren(target, child, context, simContext, maxDepth, depth + 1, seen);
   }
 
   // console.log('hi', depth)
   const children = root.children;
-  children.sort((a, b) => {
-    if (a === target) return -1;
-    if (a === root) return -1;
-    if (a.isAlreadyCompleted(simContext)) return -1;
-    if (!a.shouldConsider(context)) return 1;
-    if (b === target) return 1;
-    if (b === root) return 1;
-    return b.children.length - a.children.length;
-  });
+  // children.sort((a,b) => Math.random() - 0.5)
 
+  children.sort((a, b) => {
+    if (a === root) return -1;
+    if (b === root) return 1;
+    if (a === target) return -1;
+    if (b === target) return 1;
+
+    if (!a.shouldConsider(context)) return 1; // counter-inuititive, but move these forward to provide partial results sooner.
+    if (!b.shouldConsider(context)) return -1;
+
+    if (a.isAlreadyCompleted(simContext)) return 1;
+    if (b.isAlreadyCompleted(simContext)) return -1;
+
+    return a.children.length - b.children.length;
+  });
+  // console.log(
+  //   "root",
+  //   root.name,
+  //   "children\n\t",
+  //   children.map((c) => c.name)
+  // );
 }
 
+function reverseNodeChildren<C, SC>(root: LogicNode<C, SC>, maxDepth: number, depth = 0, seen = new Set()) {
+  if (depth >= maxDepth) return;
+  for (const child of root.children) {
+    if (seen.has(child)) continue;
+    seen.add(child);
+    reverseNodeChildren(child, maxDepth, depth + 1, seen);
+  }
+
+  root.children.reverse();
+  // console.log(
+  //   "root",
+  //   root.name,
+  //   "children\n\t",
+  //   children.map((c) => c.name)
+  // );
+}
 /**
  * The plan is to create a weighted NFA.
  *
@@ -174,7 +210,7 @@ export class WeightedNFAPlanner<C, SC> {
   private readonly _truncatedNodes: Set<LogicNode<C, SC>> = new Set();
   private readonly _childMap: Map<LogicNode<C, SC>, Set<LogicNode<C, SC>>> = new Map();
 
-  constructor(root: LogicNode<C, SC>, end: LogicNode<C, SC>, maxDepth = 20, autosort = false) {
+  constructor(root: LogicNode<C, SC>, end: LogicNode<C, SC>, maxDepth = 20) {
     this._root = root;
     this._end = end;
     this.maxDepth = maxDepth;
@@ -190,12 +226,6 @@ export class WeightedNFAPlanner<C, SC> {
     this.loadChildren();
 
     console.log("truncated size:", this._truncatedNodes.size);
-
-    if (autosort) {
-      for (const node of this._truncatedNodes) {
-        node.sortChildren(this._end);
-      }
-    }
 
     // for (const node of this._truncatedNodes) {
     //   console.log(node.name);
@@ -236,10 +266,20 @@ export class WeightedNFAPlanner<C, SC> {
   }
 
   bestPlan(plans: NewLogicPath<C, SC>[]): NewLogicPath<C, SC> {
+    console.log(plans.length);
     const costs = plans.map((n) => n.cost);
     const lowest = costs.reduce((a, b) => (a > b ? b : a));
-    const index = costs.indexOf(lowest);
-    return plans[index];
+    plans = plans.filter((p) => p.cost === lowest);
+    console.log(plans.length);
+    const shortestLen = plans.map((p) => p.nodes.length).reduce((a, b) => (a > b ? b : a));
+    plans = plans.filter((p) => p.nodes.length === shortestLen);
+    console.log(plans.length);
+    const keys = plans.map((p) => p.keyNodes);
+    const shortestKeys = keys.reduce((a, b) => (a > b ? b : a));
+    plans = plans.filter((p) => p.keyNodes === shortestKeys);
+    console.log(plans.length);
+
+    return plans[0];
   }
 
   plan(context: C, simContext: SC) {
@@ -347,7 +387,7 @@ export class WeightedNFAPlanner<C, SC> {
     if (root.isAlreadyCompleted(simContext)) {
       addCost = 0;
     } else if (root.shouldEnter(simContext)) {
-      root.simEnter?.(simContext)
+      root.simEnter?.(simContext);
       addCost = root._calculateCost(simContext);
       root.simExit?.(simContext);
     } else {
@@ -366,7 +406,6 @@ export class WeightedNFAPlanner<C, SC> {
     for (const child of got.keys()) {
       if (!child._shouldEnter(simContext)) continue;
 
-  
       const copiedContext = { ...simContext };
       // child.simEnter?.(copiedContext);
       const childPaths = this._plan3(child, context, copiedContext, end, depth + 1, cost + addCost, shouldConsider, reference);
@@ -558,12 +597,18 @@ export class WeightedNFAPlanner<C, SC> {
     options: {
       maxSuccessPaths?: number;
       maxPartialPaths?: number;
+      costOffset?: number;
+      nodeOffset?: number;
+      sort?: boolean;
     } = {}
   ) {
+    const maxAmt = options.maxSuccessPaths ?? Infinity;
+    const maxPartialAmt = options.maxPartialPaths ?? Infinity;
 
+    // const sort = options.sort ?? maxAmt === 1 ? "single" : maxAmt === Infinity && maxPartialAmt === Infinity ? "full" : "partial";
 
-    // sortNodeChildren(this._end, this._root, context, simContext, this.maxDepth);
-  
+    sortNodeChildren(this._end, this._root, context, simContext,  this.maxDepth);
+
     // console.log('done sorting!')
     const solveRec: { [key: number]: { lowestCost: number; keyNodeNum: number; success: boolean } } = {};
 
@@ -579,28 +624,29 @@ export class WeightedNFAPlanner<C, SC> {
     this.loadChildren(childSet, childMap);
 
     for (const node of childSet) {
-      const val = node.shouldConsider(context);
-      considerMap.set(node, val);
-      // if (val) continue;
-      // for (const value of childMap.values()) {
-      //   value.delete(node);
-      // }
+      considerMap.set(node, node.shouldConsider(context));
     }
 
     const ref = {
       c: context,
       amt: 0,
       partialAmt: 0,
-      maxAmt: options.maxSuccessPaths ?? Infinity,
-      maxPartialAmt: options.maxPartialPaths ?? Infinity,
+      maxAmt,
+      maxPartialAmt,
       lowestSuccessCost: Infinity,
+      lowestSuccessCostOffset: options.costOffset ?? Infinity,
+      lowestSuccessNodes: Infinity,
+      lowestSuccessNodeOffset: options.nodeOffset ?? Infinity,
       solveRecord: solveRec,
       considerMap: considerMap,
       childMap: childMap,
     };
     const paths = this._bestplanpartial(this._root, context, simContext, this._end, ref);
+    console.log(ref.amt, ref.partialAmt, ref.lowestSuccessCost, ref.lowestSuccessNodes);
+
+    // return paths.map((p) => this.postProcess(p, { ...simContext }));
     return paths;
-    // return paths.map((p) => this.postProcess(p, {...simContext}));
+    //
   }
 
   _bestplanpartial(
@@ -615,6 +661,9 @@ export class WeightedNFAPlanner<C, SC> {
       maxAmt: number;
       maxPartialAmt: number;
       lowestSuccessCost: number;
+      lowestSuccessCostOffset: number;
+      lowestSuccessNodes: number;
+      lowestSuccessNodeOffset: number;
       solveRecord: { [key: number]: { lowestCost: number; keyNodeNum: number; success: boolean } };
       considerMap: Map<LogicNode, boolean>;
       childMap: Map<LogicNode, Set<LogicNode>>;
@@ -624,11 +673,13 @@ export class WeightedNFAPlanner<C, SC> {
     cost = 0
   ) {
     if (depth >= this.maxDepth) return [];
+
     if (ref.amt >= ref.maxAmt) return [];
-    if (ref.partialAmt >= ref.maxPartialAmt) return [];
-    if (cost >= ref.lowestSuccessCost) return [];
-    if (cost >= ref.solveRecord[depth].lowestCost) return [];
-    if (consequentialNodes > ref.solveRecord[depth].keyNodeNum) return [];
+    if (ref.partialAmt >= ref.maxPartialAmt) return []; // TODO: potential bug, exit earlier than intended
+    if (cost > ref.lowestSuccessCost + ref.lowestSuccessCostOffset) return [];
+    if (depth >= ref.lowestSuccessNodes + ref.lowestSuccessNodeOffset) return []; // TODO: potential bug, exit earlier than intended
+    if (cost > ref.solveRecord[depth].lowestCost) return [];
+    if (consequentialNodes > ref.solveRecord[depth].keyNodeNum) return []; // TODO: potential bug, exit earlier than intended
 
     let consider = ref.considerMap.get(root);
 
@@ -660,6 +711,7 @@ export class WeightedNFAPlanner<C, SC> {
       ref.solveRecord[depth].keyNodeNum = Math.min(ref.solveRecord[depth].keyNodeNum, consequentialNodes);
       ref.solveRecord[depth].success = true;
       ref.lowestSuccessCost = Math.min(ref.lowestSuccessCost, cost + addCost);
+      ref.lowestSuccessNodes = Math.min(ref.lowestSuccessNodes, depth);
       let retPath = new NewLogicPath(sc, cost + addCost, consequentialNodes, root);
       return [retPath];
     }
@@ -673,7 +725,6 @@ export class WeightedNFAPlanner<C, SC> {
     if (!got) throw new Error("no children");
     for (const child of got.keys()) {
       if (!child._shouldEnter(sc)) continue;
-      // if (ref.considerMap.get(child) === false) continue;
       const copiedContext = { ...sc };
       const childPaths = this._bestplanpartial(child, c, copiedContext, end, ref, newDepth, addConsequential, newCost);
       for (const path of childPaths) {
@@ -682,9 +733,6 @@ export class WeightedNFAPlanner<C, SC> {
     }
     return paths;
   }
-
-
-
 
   bestplanpartial2(
     context: C,
@@ -709,18 +757,16 @@ export class WeightedNFAPlanner<C, SC> {
       considerMap: new Map<LogicNode, boolean>(),
     };
 
-    sortNodeChildren(this._end, this._root, context, simContext, this.maxDepth);
+    // sortNodeChildren(this._end, this._root, context, simContext, this.maxDepth);
     const paths = this._bestplanpartial2(this._root, simContext, this._end, ref);
     return paths;
     // return paths.map((p) => this.postProcess(p, {...simContext}));
-
   }
-
 
   /**
    *  A new function with same functionality as _bestplanpartial
    * but depth-first search instead of breadth-first search.
-   * 
+   *
    */
   _bestplanpartial2(
     root: LogicNode<C, SC>,
@@ -745,17 +791,10 @@ export class WeightedNFAPlanner<C, SC> {
     if (ref.amt >= ref.maxAmt) return [];
     if (ref.partialAmt >= ref.maxPartialAmt) return [];
     if (cost >= ref.lowestSuccessCost) return [];
-    if (cost >= ref.lowestShit) return [];
+    // if (cost >= ref.lowestShit) return [];
 
-    if (!this._truncatedNodes.has(root)) return [];
+    // if (!this._truncatedNodes.has(root)) return [];
     if (ref.considerMap.get(root) === false) return [];
-
-    let consider = ref.considerMap.get(root);
-    if (consider === undefined) {
-      consider = root.shouldConsider(ref.c);
-      ref.considerMap.set(root, root.shouldConsider(ref.c));
-      if (consider === false) return [];
-    } else if (consider === false) return [];
 
     let addCost;
     if (root.isAlreadyCompleted(simContext)) {
@@ -780,20 +819,7 @@ export class WeightedNFAPlanner<C, SC> {
     for (const child of root.children) {
       if (!child._shouldEnter(simContext)) continue;
 
-      if (child === end) {
-        const path1 = this._bestplanpartial2(child, simContext, end, ref, [...path, root], depth + 1, cost + addCost);
-        if (path1.length === 0) continue;
-        paths.push(path1[0]);
-        return paths;
-      }
-
-      if (!this._truncatedNodes.has(child)) continue;
-      const consider = ref.considerMap.get(child);
-      if (consider === undefined) {
-        const val = root.shouldConsider(ref.c);
-        ref.considerMap.set(root, root.shouldConsider(ref.c));
-        if (val === false) continue;
-      } else if (consider === false) continue;
+      // if (ref.considerMap.get(child) === false) continue;
 
       const copiedContext = { ...simContext };
       child.simEnter?.(copiedContext);
@@ -804,7 +830,6 @@ export class WeightedNFAPlanner<C, SC> {
     }
     return paths;
   }
-
 
   postFastPlan(paths: NewLogicPath<C, SC>[], simContext: SC) {
     return paths.map((p) => this.postProcess(p, { ...simContext }));
@@ -823,6 +848,7 @@ export class WeightedNFAPlanner<C, SC> {
     const workingBoundaries: Record<number, number> = {};
     for (const item of this.findLoops(nodes)) {
       const [start, end] = item;
+      if (end === nodes.length) continue; // skip last node, as we'll probably want to keep all instances of this.
       actualBoundaries[start] = end;
     }
 
@@ -988,7 +1014,7 @@ export class WeightedNFAHandler<C = unknown, SC = unknown> {
     this._end = end;
     this._interrupt = interrupt;
 
-    this._planner = new WeightedNFAPlanner(this._root, this._end, this.opts.maxDepth, this.opts.autosort);
+    this._planner = new WeightedNFAPlanner(this._root, this._end, this.opts.maxDepth);
     let paths;
     if (this.fastPlanning) {
       paths = this._planner.fastplan(this.context, this.simContext, 1);
