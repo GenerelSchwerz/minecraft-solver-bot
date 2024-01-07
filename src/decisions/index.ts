@@ -70,6 +70,7 @@ export function findPathsToEnd(
 interface LogicEvents {
   interrupted: () => void;
   failed: () => void;
+  finished: () => void;
   entered: () => void;
   exited: () => void;
   cleanup: () => void;
@@ -112,9 +113,9 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
 
   simExit?(ctx: SimContext): void;
 
-  onEnter?(ctx: Context): void;
+  onEnter?(ctx: Context): Promise<void> | void;
 
-  onExit?(ctx: Context): void;
+  onExit?(ctx: Context): Promise<void> | void;
 
   public readonly uuid = v4();
 
@@ -150,15 +151,18 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
     return this.shouldEnter(ctx) || this.isAlreadyCompleted(ctx);
   }
 
-  isFinished(): boolean {
+  isFinished(ctx: Context): boolean {
     return true;
   }
 
-  isFailed(): boolean {
+  isFailed(ctx: Context): boolean {
     return false;
   }
 
-  isInterrupted(): boolean {
+  isInterrupted(ctx: Context): boolean {
     return false;
   }
 }
+
+
+export {NewLogicPath, WeightedNFAHandler, WeightedNFAPlanner} from './nfa'

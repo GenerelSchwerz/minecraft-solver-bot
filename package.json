@@ -6,8 +6,10 @@
   "author": "GenerelSchwerz <xXSG.KingXx@gmail.com>",
   "license": "MIT",
   "dependencies": {
+    "@nxg-org/mineflayer-static-statemachine": "0.1.8",
     "@types/uuid": "^9.0.7",
     "mineflayer": "^4.14.0",
+    "mineflayer-pathfinder": "^2.4.5",
     "strict-event-emitter": "^0.5.1",
     "strict-event-emitter-types": "^2.0.0",
     "typescript": "^5.3.3",

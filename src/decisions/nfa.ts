@@ -599,7 +599,7 @@ export class WeightedNFAPlanner<C, SC> {
       maxPartialPaths?: number;
       costOffset?: number;
       nodeOffset?: number;
-      sort?: boolean;
+      timeout?: number;
     } = {}
   ) {
     const maxAmt = options.maxSuccessPaths ?? Infinity;
@@ -640,8 +640,11 @@ export class WeightedNFAPlanner<C, SC> {
       solveRecord: solveRec,
       considerMap: considerMap,
       childMap: childMap,
+
     };
-    const paths = this._bestplanpartial(this._root, context, simContext, this._end, ref);
+    const startTime = Date.now();
+    const timeout = options.timeout ?? 5000;
+    const paths = this._bestplanpartial(this._root, context, simContext, this._end, ref, undefined, undefined, undefined, startTime, timeout);
     console.log(ref.amt, ref.partialAmt, ref.lowestSuccessCost, ref.lowestSuccessNodes);
 
     // return paths.map((p) => this.postProcess(p, { ...simContext }));
@@ -670,8 +673,14 @@ export class WeightedNFAPlanner<C, SC> {
     },
     depth = 0,
     consequentialNodes = 0, // TODO: potential bug here.
-    cost = 0
+    cost = 0,
+    startTime = Date.now(),
+    timeout = 5000 // new argument
   ) {
+    // Check if the function has timed out
+    if (Date.now() - startTime > timeout) {
+      return []
+    }
     if (depth >= this.maxDepth) return [];
 
     if (ref.amt >= ref.maxAmt) return [];
@@ -950,15 +959,16 @@ export class WeightedNFAPlanner<C, SC> {
   }
 }
 
-export interface WeightedNFAHandlerEvents {
-  enter: (node: LogicNode) => void;
-  exit: (node: LogicNode) => void;
-  complete: (node: LogicNode) => void;
-  failed: (node: LogicNode) => void;
-  interrupt: (node: LogicNode) => void;
-}
+// export interface WeightedNFAHandlerEvents {
+//   enter: (node: LogicNode) => void;
+//   exit: (node: LogicNode) => void;
+//   complete: (node: LogicNode) => void;
+//   failed: (node: LogicNode) => void;
+//   interrupt: (node: LogicNode) => void;
+// }
 
 export class WeightedNFAHandler<C = unknown, SC = unknown> {
+  private _context!: C;
   private _root!: LogicNode<C, SC>;
   private _end!: LogicNode<C, SC>;
   private _interrupt!: LogicNode<C, SC>;
@@ -988,6 +998,10 @@ export class WeightedNFAHandler<C = unknown, SC = unknown> {
     return this._currentPath;
   }
 
+  get currentNode() {
+    return this._currentNode;
+  }
+
   get cost() {
     return this._currentPath?.cost ?? -1;
   }
@@ -995,7 +1009,7 @@ export class WeightedNFAHandler<C = unknown, SC = unknown> {
   get done() {
     if (!this._currentPath) return true;
     if (this._currentPath.nodes.length === 0) return true;
-    return this._currentNode !== this._end;
+    return this._currentNode === this._end;
   }
 
   get handlingInterrupt() {
@@ -1006,10 +1020,11 @@ export class WeightedNFAHandler<C = unknown, SC = unknown> {
     delete this._currentPath;
   }
 
-  init(start: LogicNode<C, SC>, end: LogicNode<C, SC>, interrupt: LogicNode<C, SC>) {
+  init(context: C, start: LogicNode<C, SC>, end: LogicNode<C, SC>, interrupt: LogicNode<C, SC>) {
     if (this._currentPath) this.pathCleanup(this._currentPath);
     if (this._currentNode) this.exitNode(this._currentNode);
 
+    this._context = context;
     this._root = start;
     this._end = end;
     this._interrupt = interrupt;
@@ -1017,7 +1032,7 @@ export class WeightedNFAHandler<C = unknown, SC = unknown> {
     this._planner = new WeightedNFAPlanner(this._root, this._end, this.opts.maxDepth);
     let paths;
     if (this.fastPlanning) {
-      paths = this._planner.fastplan(this.context, this.simContext, 1);
+      paths = this._planner.bestplanpartial(this.context, this.simContext);
       paths = paths.map((p) => this._planner!.postProcess(p, this.simContext));
     } else {
       paths = this._planner.plan(this.context, this.simContext);
@@ -1067,19 +1082,19 @@ export class WeightedNFAHandler<C = unknown, SC = unknown> {
     if (!this._currentPath) throw new Error("not initialized");
     if (this._currentNode !== this._interrupt) throw new Error("not in interrupt node");
 
-    if (this._currentNode.isInterrupted()) {
+    if (this._currentNode.isInterrupted(this._context)) {
       this.exitNode(this._currentNode);
       this.clear();
       throw new Error("interrupt node interrupted");
     }
 
-    if (this._currentNode.isFailed()) {
+    if (this._currentNode.isFailed(this._context)) {
       this.exitNode(this._currentNode);
       this.clear();
       throw new Error("interrupt node failed");
     }
 
-    if (this._currentNode.isFinished()) {
+    if (this._currentNode.isFinished(this._context)) {
       if (!this._prevNode) throw new Error("no previous node");
       this.enterNode(this._prevNode);
       return;
@@ -1087,7 +1102,7 @@ export class WeightedNFAHandler<C = unknown, SC = unknown> {
   }
 
   update() {
-    if (this.done) return;
+    if (this.done) return console.log('hey');
     if (!this._currentPath) throw new Error("not initialized");
     if (!this._currentNode) {
       this.enterNode(this._currentPath.nodes[0]);
@@ -1099,12 +1114,13 @@ export class WeightedNFAHandler<C = unknown, SC = unknown> {
       return;
     }
 
-    if (this._currentNode.isInterrupted()) {
+    if (this._currentNode.isInterrupted(this._context)) {
       this.enterNode(this._interrupt);
       return;
     }
 
-    if (this._currentNode.isFinished()) {
+    if (this._currentNode.isFinished(this._context)) {
+      console.log('finished')
       if (this._currentNode === this._end) {
         this.exitNode(this._currentNode);
         this.clear();
@@ -1121,7 +1137,7 @@ export class WeightedNFAHandler<C = unknown, SC = unknown> {
      * Can implement recalculation or sticking to path here.
      * For right now, stick with given path.
      */
-    if (this._currentNode.isFailed()) {
+    if (this._currentNode.isFailed(this._context)) {
       if (this._currentNode === this._root) {
         this.exitNode(this._currentNode);
         throw new Error("root node failed");
