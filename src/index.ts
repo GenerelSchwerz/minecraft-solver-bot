@@ -194,10 +194,12 @@ bot.on("chat", async (username, message) => {
         const fns = bot.listeners('physicsTick')
 
         bot.chat('trying to craft ' + item.displayName + ' at ' + maxDistance)
+
+
         const machine = buildCraftingMachine(bot, item.id, null, maxDistance);
         const stateMachine = new BotStateMachine({bot, root: machine, data: {}, autoStart: false});
         stateMachine.start();
-        stateMachine.on('stateEntered', (type, cls, newState) => console.log(newState.stateName))
+        // stateMachine.on('stateEntered', (type, cls, newState) => console.log(newState.stateName))
         // const webserver = new StateMachineWebserver({ stateMachine });
         // webserver.startServer();
         break
