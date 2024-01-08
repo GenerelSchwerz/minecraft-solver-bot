@@ -3,9 +3,9 @@
 import { LogicNode } from "../..";
 
 export class LogicGraph<Context = unknown, SimContext = unknown> {
-    public runningNode: LogicNode<Context, SimContext>;
-    private nodes: LogicNode<Context, SimContext>[];
-    private visitedNodes: LogicNode<Context, SimContext>[];
+    public runningNode: LogicNode<SimContext, Context>;
+    private nodes: LogicNode<SimContext, Context>[];
+    private visitedNodes: LogicNode<SimContext, Context>[];
   
     private handlingInterruption = false;
   
@@ -16,9 +16,9 @@ export class LogicGraph<Context = unknown, SimContext = unknown> {
     protected constructor(
       ctx: Context,
       simCtx: SimContext,
-      private childrenMap: Map<LogicNode<Context, SimContext>, LogicNode<Context, SimContext>[]>,
-      private rootNode: LogicNode<Context, SimContext>,
-      private interruptNode: LogicNode<Context, SimContext>
+      private childrenMap: Map<LogicNode<SimContext, Context>, LogicNode<SimContext, Context>[]>,
+      private rootNode: LogicNode<SimContext, Context>,
+      private interruptNode: LogicNode<SimContext, Context>
     ) {
       this.#ctx = ctx;
       this.#simCtx = simCtx;
@@ -30,9 +30,9 @@ export class LogicGraph<Context = unknown, SimContext = unknown> {
     static fromTo<Context = unknown, SimContext = unknown>(
       ctx: Context,
       simCtx: SimContext,
-      from: LogicNode<Context, SimContext>,
-      to: LogicNode<Context, SimContext>,
-      interrupt: LogicNode<Context, SimContext>
+      from: LogicNode<SimContext, Context>,
+      to: LogicNode<SimContext, Context>,
+      interrupt: LogicNode<SimContext, Context>
     ) {
       const paths = findPathsToBeginning(to, (node) => node === to)!;
   
@@ -50,14 +50,14 @@ export class LogicGraph<Context = unknown, SimContext = unknown> {
       }
       // console.log(paths)
       // console.log(mapping)
-      return new LogicGraph<Context, SimContext>(ctx, simCtx, mapping, from, interrupt);
+      return new LogicGraph<SimContext, Context>(ctx, simCtx, mapping, from, interrupt);
     }
   
     static rootTree<Context = unknown, SimContext = unknown>(
       ctx: Context,
       simCtx: SimContext,
-      root: LogicNode<Context, SimContext>,
-      interrupt: LogicNode<Context, SimContext>
+      root: LogicNode<SimContext, Context>,
+      interrupt: LogicNode<SimContext, Context>
     ) {
       const mapping = new Map();
       const loop = (root: LogicNode) => {
@@ -68,7 +68,7 @@ export class LogicGraph<Context = unknown, SimContext = unknown> {
       };
   
       loop(root);
-      return new LogicGraph<Context, SimContext>(ctx, simCtx, mapping, root, interrupt);
+      return new LogicGraph<SimContext, Context>(ctx, simCtx, mapping, root, interrupt);
     }
   
     public get isComplete() {
@@ -176,15 +176,15 @@ export class LogicGraph<Context = unknown, SimContext = unknown> {
   }
   
   export class LogicPath<Context = unknown, SimContext = unknown> {
-    #internal: LogicNode<Context, SimContext>[];
-    #current: LogicNode<Context, SimContext>;
+    #internal: LogicNode<SimContext, Context>[];
+    #current: LogicNode<SimContext, Context>;
   
     // pre-calc for speed
     #indexes: Record<string, number> = {};
     #ctx: Context;
     #simCtx: SimContext;
   
-    constructor(ctx: Context, simCtx: SimContext, internal: LogicNode<Context, SimContext>[], current = internal[0]) {
+    constructor(ctx: Context, simCtx: SimContext, internal: LogicNode<SimContext, Context>[], current = internal[0]) {
       this.#internal = internal;
       this.#current = current;
       this.#ctx = ctx;
@@ -193,28 +193,28 @@ export class LogicGraph<Context = unknown, SimContext = unknown> {
       this.initIndexes();
     }
   
-    static fromList<Context = unknown, SimContext = unknown>(ctx: Context, simCtx: SimContext, nodes: LogicNode<Context, SimContext>[]) {
-      return new LogicPath<Context, SimContext>(ctx, simCtx, nodes);
+    static fromList<Context = unknown, SimContext = unknown>(ctx: Context, simCtx: SimContext, nodes: LogicNode<SimContext, Context>[]) {
+      return new LogicPath<SimContext, Context>(ctx, simCtx, nodes);
     }
   
     public get completed(): boolean {
       return this.#indexes[this.#current.uuid] === this.#internal.length - 1;
     }
   
-    public get current(): LogicNode<Context, SimContext> {
+    public get current(): LogicNode<SimContext, Context> {
       return this.#current;
     }
   
-    public get nodes(): LogicNode<Context, SimContext>[] {
+    public get nodes(): LogicNode<SimContext, Context>[] {
       return this.#internal;
     }
   
-    public get next(): LogicNode<Context, SimContext> {
+    public get next(): LogicNode<SimContext, Context> {
       if (this.completed) throw new Error("LogicPath: Cannot get next, path is completed.");
       return this.#internal[this.#indexes[this.#current.uuid] + 1];
     }
   
-    public get end(): LogicNode<Context, SimContext> {
+    public get end(): LogicNode<SimContext, Context> {
       return this.#internal[this.#internal.length - 1];
     }
   
@@ -226,11 +226,11 @@ export class LogicGraph<Context = unknown, SimContext = unknown> {
       return this.#simCtx;
     }
   
-    has(node: LogicNode<Context, SimContext>): boolean {
+    has(node: LogicNode<SimContext, Context>): boolean {
       return this.#indexes[node.uuid] !== undefined;
     }
   
-    sublist(start: LogicNode<Context, SimContext>): LogicPath<Context, SimContext> {
+    sublist(start: LogicNode<SimContext, Context>): LogicPath<SimContext, Context> {
       if (this.#indexes[start.uuid] === undefined) throw new Error("LogicPath: Cannot create sublist, start node is not in path.");
       // if (this.#indexes[start.uuid] === 0) return this;
       const nodes = this.#internal.slice(this.#indexes[start.uuid]);
@@ -332,15 +332,15 @@ export class LogicGraph<Context = unknown, SimContext = unknown> {
   }
   
   export class LogicPathGraph<Context = unknown, SimContext = unknown> {
-    #paths: LogicPath<Context, SimContext>[];
-    #currentNode: LogicNode<Context, SimContext>;
-    #interruptNode: LogicNode<Context, SimContext>;
-    #currentPath: LogicPath<Context, SimContext>;
-    #visited: LogicNode<Context, SimContext>[] = [];
+    #paths: LogicPath<SimContext, Context>[];
+    #currentNode: LogicNode<SimContext, Context>;
+    #interruptNode: LogicNode<SimContext, Context>;
+    #currentPath: LogicPath<SimContext, Context>;
+    #visited: LogicNode<SimContext, Context>[] = [];
   
     #handlingInterruption = false;
   
-    constructor(paths: LogicPath<Context, SimContext>[], interruptNode: LogicNode<Context, SimContext>) {
+    constructor(paths: LogicPath<SimContext, Context>[], interruptNode: LogicNode<SimContext, Context>) {
       if (paths.length === 0) throw new Error("LogicPathGraph: Cannot create graph with no paths.");
       const start = paths[0].current; // should be 0
       for (const path of paths)
@@ -376,14 +376,14 @@ export class LogicGraph<Context = unknown, SimContext = unknown> {
     //   this.enterNode(this.#currentNode)
     // }
   
-    private considerPaths(): LogicPath<Context, SimContext>[] {
+    private considerPaths(): LogicPath<SimContext, Context>[] {
       return this.#paths
         .filter((path) => path.has(this.#currentNode))
         .map((p) => p.sublist(this.#currentNode))
         .filter((p) => p.next.shouldEnter(p.simCtx));
     }
   
-    private enterNode(node: LogicNode<Context, SimContext>) {
+    private enterNode(node: LogicNode<SimContext, Context>) {
       this.#currentNode.onExit?.(this.currentCtx!);
       this.#visited.push(this.#currentNode);
       this.#currentNode.cleanup?.();

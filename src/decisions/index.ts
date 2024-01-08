@@ -1,6 +1,7 @@
 import { v4 } from "uuid";
 import { StrictEventEmitter } from "strict-event-emitter-types";
 import { EventEmitter } from "events";
+import { SimulationContext } from "./nfa";
 
 function isSubClassOf<T extends new (...args: any[]) => any>(child: T, parent: T) {
   return child === parent && child.prototype instanceof parent;
@@ -76,7 +77,7 @@ interface LogicEvents {
   cleanup: () => void;
 }
 
-export abstract class LogicNode<Context = unknown, SimContext = unknown> extends (EventEmitter as new () => StrictEventEmitter<
+export abstract class LogicNode<SimContext extends SimulationContext = SimulationContext, Context = unknown > extends (EventEmitter as new () => StrictEventEmitter<
   EventEmitter,
   LogicEvents
 >) {
@@ -119,11 +120,11 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
 
   public readonly uuid = v4();
 
-  children: LogicNode<Context, SimContext>[] = [];
+  children: LogicNode<SimContext, Context>[] = [];
 
-  readonly parents: LogicNode<Context, SimContext>[] = [];
+  readonly parents: LogicNode<SimContext, Context>[] = [];
 
-  addParents(...parents: LogicNode<Context, SimContext>[]) {
+  addParents(...parents: LogicNode<SimContext, Context>[]) {
     for (const parent of parents) {
       if (this.parents.includes(parent)) return; // already added, prevent multiple if already specified.
       this.parents.push(parent);
@@ -131,7 +132,7 @@ export abstract class LogicNode<Context = unknown, SimContext = unknown> extends
     }
   }
 
-  addChildren(...children: LogicNode<Context, SimContext>[]) {
+  addChildren(...children: LogicNode<SimContext, Context>[]) {
     for (const child of children) {
       if (this.children.includes(child)) return; // already added, prevent multiple if already specified.
       this.children.push(child);

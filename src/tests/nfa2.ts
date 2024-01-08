@@ -1,11 +1,11 @@
 import { InterruptNode } from ".";
 import { LogicNode } from "../decisions";
-import { WeightedNFAPlanner, debugPath } from "../decisions/nfa";
+import { SimulationContext, WeightedNFAPlanner, debugPath } from "../decisions/nfa";
 import { NewWeightedNFAPlanner } from "../decisions/nfa2";
 
 interface Context {}
 
-interface SimContext {
+interface SimContext extends SimulationContext {
   diamondAxe: number;
   ironAxe: number;
   stoneAxe: number;
@@ -29,9 +29,9 @@ interface SimContext {
 
 const test0: Context = {};
 
-abstract class Node extends LogicNode<Context, SimContext> {}
+abstract class Node extends LogicNode<SimContext, Context> {}
 
-class EntryNode<C, SC> extends Node {
+class EntryNode<SC, C> extends Node {
   name = "entry";
 
   shouldEnter(ctx: SimContext): boolean {
@@ -418,8 +418,8 @@ class SmeltIronNode extends Node {
   }
 }
 
-const entryNode = new EntryNode<Context, SimContext>();
-const interruptNode = new InterruptNode<Context, SimContext>();
+const entryNode = new EntryNode<SimContext, Context>();
+const interruptNode = new InterruptNode<SimContext, Context>();
 
 const collectDirtNode = new CollectDirtNode(1);
 const collectWoodNode = new CollectWoodNode(1);
@@ -497,11 +497,14 @@ let test1: SimContext = {
   wood: 0,
   woodenAxe: 0,
   stoneAxe: 0,
+  clone() {
+    return { ...this };
+  },
 };
 
-const planner = new NewWeightedNFAPlanner(entryNode, craftFurnaceNode, 30);
+const planner = new NewWeightedNFAPlanner(entryNode, craftFurnaceNode, 21);
 
-function bestplanpartial() {
+function goalfirstplan() {
   const start0 = performance.now();
   const amt = Infinity;
   const partialAmt = Infinity;
@@ -548,7 +551,7 @@ console.log("---------------------");
 // console.log('---------------------')
 // fastPlan2();
 // console.log('---------------------')
-bestplanpartial();
+goalfirstplan();
 
 clearInterval(interval);
 console.timeEnd("1secInterval");

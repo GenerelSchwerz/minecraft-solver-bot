@@ -1,14 +1,15 @@
 import { LogicNode } from ".";
+import { SimulationContext } from "./nfa";
 
-export class NewLogicPath<C, SC> {
+export class NewLogicPath<SC extends SimulationContext, C> {
   private readonly _success: boolean;
-  private readonly _nodes: LogicNode<C, SC>[];
+  private readonly _nodes: LogicNode<SC, C>[];
   private readonly _simContext: SC;
   private readonly _cost: number;
   private readonly _keyNodes: number;
   public maxDepth: number;
 
-  constructor(success: boolean, simContext: SC, cost: number, keyNodes: number, ...nodes: LogicNode<C, SC>[]) {
+  constructor(success: boolean, simContext: SC, cost: number, keyNodes: number, ...nodes: LogicNode<SC, C>[]) {
     this._success = success;
     this._simContext = simContext;
     this._nodes = nodes;
@@ -59,14 +60,14 @@ export class NewLogicPath<C, SC> {
     return nodeNames.join("");
   }
 
-  next(logicNode: LogicNode<C, SC>) {
+  next(logicNode: LogicNode<SC, C>) {
     const index = this._nodes.indexOf(logicNode);
     if (index === -1) throw new Error("node not in path");
     if (index === this._nodes.length - 1) throw new Error("no next node");
     return this._nodes[index + 1];
   }
 
-  previous(logicNode: LogicNode<C, SC>) {
+  previous(logicNode: LogicNode<SC, C>) {
     const index = this._nodes.indexOf(logicNode);
     if (index === -1) throw new Error("node not in path");
     if (index === 0) throw new Error("no previous node");
@@ -74,16 +75,16 @@ export class NewLogicPath<C, SC> {
   }
 }
 
-export class NewWeightedNFAPlanner<C, SC> {
+export class NewWeightedNFAPlanner<SC extends SimulationContext, C> {
   public maxDepth: number;
 
-  private readonly _root: LogicNode<C, SC>;
-  private readonly _end: LogicNode<C, SC>;
+  private readonly _root: LogicNode<SC, C>;
+  private readonly _end: LogicNode<SC, C>;
 
-  private readonly _truncatedNodes: Set<LogicNode<C, SC>> = new Set();
-  private readonly _parentMap: Map<LogicNode<C, SC>, Set<LogicNode<C, SC>>> = new Map();
+  private readonly _truncatedNodes: Set<LogicNode<SC, C>> = new Set();
+  private readonly _parentMap: Map<LogicNode<SC, C>, Set<LogicNode<SC, C>>> = new Map();
 
-  constructor(root: LogicNode<C, SC>, end: LogicNode<C, SC>, maxDepth = 20) {
+  constructor(root: LogicNode<SC, C>, end: LogicNode<SC, C>, maxDepth = 20) {
     this._root = root;
     this._end = end;
     this.maxDepth = maxDepth;
@@ -118,7 +119,7 @@ export class NewWeightedNFAPlanner<C, SC> {
     return ret;
   }
 
-  bestPlan(plans: NewLogicPath<C, SC>[]): NewLogicPath<C, SC> {
+  bestPlan(plans: NewLogicPath<SC, C>[]): NewLogicPath<SC, C> {
     console.log(plans.length);
     const successes = plans.some((p) => p.success);
     if (successes) plans = plans.filter((p) => p.success);
@@ -175,7 +176,7 @@ export class NewWeightedNFAPlanner<C, SC> {
       solveRec[i] = { lowestCost: Infinity, keyNodeNum: Infinity, success: false };
     }
 
-    const parentSet = new Set<LogicNode<C, SC>>();
+    const parentSet = new Set<LogicNode<SC, C>>();
     const parentMap = new Map();
     const considerMap = new Map();
 
@@ -214,10 +215,10 @@ export class NewWeightedNFAPlanner<C, SC> {
   }
 
   _goalfirstplan(
-    end: LogicNode<C, SC>,
+    end: LogicNode<SC, C>,
     c: C,
     sc: SC,
-    root: LogicNode<C, SC>,
+    root: LogicNode<SC, C>,
     ref: {
       c: C;
       amt: number;
@@ -266,11 +267,11 @@ export class NewWeightedNFAPlanner<C, SC> {
     if (ref.amt >= ref.maxAmt) return [];
     if (ref.partialAmt >= ref.maxPartialAmt) return [];
     if (cost > ref.lowestSuccessCost + ref.lowestSuccessCostOffset) return [];
-    if (ref.lowestSuccessNodes < consequentialNodes + ref.lowestSuccessNodeOffset) return [];
+    if (consequentialNodes > ref.lowestSuccessNodes + ref.lowestSuccessNodeOffset) return [];
     if (ref.solveRecord[depth].lowestCost < cost) return [];
     // if (ref.solveRecord[depth].keyNodeNum < consequentialNodes) return [];
 
-    const ret: NewLogicPath<C, SC>[] = [];
+    const ret: NewLogicPath<SC, C>[] = [];
 
     if (ref.considerMap.get(end) === false) {
       if (ref.solveRecord[depth].success) return [];
@@ -288,7 +289,7 @@ export class NewWeightedNFAPlanner<C, SC> {
         end.simEnter?.(sc);
          addCost = end._calculateCost(sc);
         end.simExit?.(sc);
-        consequentialNodes++;
+        if (addCost > 0) consequentialNodes++;
       } else {
         return [];
       }

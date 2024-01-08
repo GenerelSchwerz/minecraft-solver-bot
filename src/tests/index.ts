@@ -1,13 +1,14 @@
 import { LogicNode } from "../decisions";
+import { SimulationContext } from "../decisions/nfa";
 
 /**
  * Class for entry into logic (imagine base/static state.)
  */
-export class EntryNode<Context=unknown, SimContext=unknown> extends LogicNode<Context, SimContext> {
+export class EntryNode<SC extends SimulationContext, C> extends LogicNode<SC, C> {
   name = "entry";
 }
 
-export class InterruptNode <Context=unknown, SimContext=unknown> extends LogicNode<Context, SimContext> {
+export class InterruptNode <SC extends SimulationContext, C> extends LogicNode<SC, C> {
   name = "interrupt";
 }
 

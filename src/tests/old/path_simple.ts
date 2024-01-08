@@ -21,7 +21,7 @@ const test1: SimContext = {
   woodenAxe: 0,
 };
 
-class CollectWoodNode extends LogicNode<Context, SimContext> {
+class CollectWoodNode extends LogicNode<SimContext, Context> {
   name = "collectWood";
   simCtx!: SimContext
 
@@ -43,7 +43,7 @@ class CollectWoodNode extends LogicNode<Context, SimContext> {
   }
 }
 
-class CraftWoodenAxeNode extends LogicNode<Context, SimContext> {
+class CraftWoodenAxeNode extends LogicNode<SimContext, Context> {
   name = "craftWoodenAxe";
 
   isAlreadyCompleted(ctx: SimContext): boolean {
@@ -67,7 +67,7 @@ class CraftWoodenAxeNode extends LogicNode<Context, SimContext> {
 
 }
 
-class ChopTreeNode extends LogicNode<Context, SimContext> {
+class ChopTreeNode extends LogicNode<SimContext, Context> {
   name = "chopTree";
 
   calculateCost(ctx: SimContext): number {
@@ -90,7 +90,7 @@ craftWoodenAxeNode.addChildren(treeNode);
 
 
 
-let paths: LogicNode<Context, SimContext>[][] = findPathsToBeginning(treeNode);
+let paths: LogicNode<SimContext, Context>[][] = findPathsToBeginning(treeNode);
 
 
 
@@ -99,7 +99,7 @@ async function main() {
   console.log(paths.map(p=>[p.length, p.map(n=>n.name)]), paths.length)
   const newPaths = paths.map((p) => LogicPath.fromList(test0, test1, p));
 
-  const graph1 = new LogicPathGraph<Context, SimContext>(newPaths, interruptNode);
+  const graph1 = new LogicPathGraph<SimContext, Context>(newPaths, interruptNode);
 
   // graph1.begin();
   while (!graph1.completed) {

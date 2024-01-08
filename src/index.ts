@@ -16,8 +16,8 @@ import { buildCraftingMachine } from "./statemachines/craft";
 import {Item as mdItem} from 'minecraft-data'
 import { BotStateMachine, StateMachineWebserver } from "@nxg-org/mineflayer-static-statemachine";
 
-const entryNode = new states.EntryNode<Context, SimContext>();
-const interruptNode = new states.InterruptNode<Context, SimContext>();
+const entryNode = new states.EntryNode<SimContext, Context>();
+const interruptNode = new states.InterruptNode<SimContext, Context>();
 
 const collectDirtNode = new states.CollectDirtNode(1);
 const collectWoodNode = new states.CollectWoodNode(1);

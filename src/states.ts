@@ -10,7 +10,7 @@ import { sleep } from "./utils";
 
 import {Item as mdItem} from 'minecraft-data'
 
-abstract class Node extends LogicNode<Context, SimContext> {}
+abstract class Node extends LogicNode<SimContext, Context> {}
 
 function goalToBlocksOrItems(ctx: Context, blockIds: number[], itemIds: number[], blockCount = 1, itemCount = 1) {
   const blocks =

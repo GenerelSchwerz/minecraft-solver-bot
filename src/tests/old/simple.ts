@@ -49,7 +49,7 @@ function main() {
   );
   console.log("wanted", test.name);
 
-  const graph = LogicGraph.fromTo<Context, SimContext>(test0, test1, entryNode, test, interruptNode);
+  const graph = LogicGraph.fromTo<SimContext, Context>(test0, test1, entryNode, test, interruptNode);
 
   while (!graph.isComplete) {
     graph.update();

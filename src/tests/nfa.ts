@@ -1,10 +1,10 @@
 import { EntryNode, InterruptNode } from ".";
 import { LogicNode } from "../decisions";
-import { WeightedNFAPlanner } from "../decisions/nfa";
+import { SimulationContext, WeightedNFAPlanner } from "../decisions/nfa";
 
 interface Context {}
 
-interface SimContext {
+interface SimContext extends SimulationContext {
   diamondAxe: number;
   ironAxe: number;
   sticks: number;
@@ -25,7 +25,7 @@ interface SimContext {
 
 const test0: Context = {};
 
-abstract class Node extends LogicNode<Context, SimContext> {}
+abstract class Node extends LogicNode<SimContext, Context> {}
 
 class CollectWoodNode extends Node {
   name = "collectWood";
@@ -348,8 +348,9 @@ class SmeltIronNode extends Node {
 
 
 
-const entryNode = new EntryNode<Context, SimContext>();
-const interruptNode = new InterruptNode<Context, SimContext>();
+
+const entryNode = new EntryNode<SimContext, Context>();
+const interruptNode = new InterruptNode<SimContext, Context>();
 
 const collectDirtNode = new CollectDirtNode(1);
 const collectWoodNode = new CollectWoodNode(1);
@@ -375,17 +376,11 @@ const smeltIronNode = new SmeltIronNode(1);
 entryNode.addChildren(
   collectDirtNode,
   collectWoodNode,
-
+  // craftSticksNode
 );
 
-collectDirtNode.addChildren(collectDirtNode);
-collectWoodNode.addChildren(
-  
-  collectWoodNode,
-  craftSticksNode,
-  
-  
-);
+collectDirtNode.addChildren(entryNode);
+collectWoodNode.addChildren(entryNode, craftSticksNode);
 collectStoneNode.addChildren(collectStoneNode, craftFurnaceNode, craftStoneAxeNode, craftStonePickaxeNode);
 collectIronNode.addChildren(collectIronNode, craftFurnaceNode);
 collectDiamondNode.addChildren(collectDiamondNode, craftDiamondPickaxeNode);
@@ -428,14 +423,16 @@ let test1: SimContext = {
   stone: 0,
   wood: 0,
   woodenAxe: 0,
-  stoneAxe: 0
+  stoneAxe: 0,
+  clone: null as any 
+ 
 }
 
 
 // test1 = {
 //   diamondAxe: 0,
 //   ironAxe: 0,
-//   sticks: 8,
+//   sticks: 0,
 //   diamonds: 0,
 //   diamondPickaxe: 0,
 //   ironOre: 0,
@@ -446,12 +443,36 @@ let test1: SimContext = {
 //   dirt: 0,
 //   woodenPickaxe: 0,
 //   stone: 0,
-//   wood: 0,
+//   wood: 9,
 //   woodenAxe: 0,
 //   stoneAxe: 0,
-// }
+// } as any
 
-const planner = new WeightedNFAPlanner(entryNode, craftFurnaceNode, 25);
+//  more than doubles the performance.
+test1.clone = function () {
+  // return {...this}
+  return {
+    diamondAxe: this.diamondAxe,
+    ironAxe: this.ironAxe,
+    sticks: this.sticks,
+    diamonds: this.diamonds,
+    diamondPickaxe: this.diamondPickaxe,
+    ironOre: this.ironOre,
+    ironPickaxe: this.ironPickaxe,
+    furnace: this.furnace,
+    iron: this.iron,
+    stonePickaxe: this.stonePickaxe,
+    dirt: this.dirt,
+    woodenPickaxe: this.woodenPickaxe,
+    stone: this.stone,
+    wood: this.wood,
+    woodenAxe: this.woodenAxe,
+    stoneAxe: this.stoneAxe,
+    clone: this.clone,
+  }
+}
+
+const planner = new WeightedNFAPlanner(entryNode, craftDiamondPickaxeNode, 40);
 
 
 function normalPlan() {
@@ -540,7 +561,7 @@ function bestplanpartial() {
   const amt = Infinity
   const partialAmt = Infinity
   const costOffset = 0
-  const nodeOffset = Infinity
+  const nodeOffset = 0
   const opts = {
     maxSuccessPaths: amt,
     maxPartialPaths: partialAmt,
@@ -549,7 +570,7 @@ function bestplanpartial() {
     timeout: Infinity,
   }
   const getSC = () => {return {...test1}}
-  const paths = planner.goalfirstplan(test0, test1, opts);
+  const paths = planner.bestplanpartial(test0, test1, opts);
   const end0 = performance.now();
 
 
@@ -574,8 +595,8 @@ function bestplanpartial() {
   
     console.log("post-processing took", end1 - start1, "ms", processedPaths.map(c=>c.cost));
   
-   console.log( processedPaths.filter(p=>p.success).map(p=>p.toBetterString()).join('\n\n\n'))
-    const bestPath1 = processedPaths[0];//planner.bestPlan(processedPaths);
+  //  console.log( processedPaths.filter(p=>p.success).map(p=>p.toBetterString()).join('\n\n\n'))
+    const bestPath1 = planner.bestPlan(processedPaths);
     console.log(bestPath1.toBetterString());
     console.log(bestPath1.cost, bestPath1.simContext, bestPath1.nodes.length, bestPath1.keyNodes);
 
@@ -584,8 +605,6 @@ function bestplanpartial() {
 
 // bestplanpartial();
 console.time('1secInterval')
-const interval = setInterval(() => console.log('1secInterval', 'hey'), 1000)
-console.log(interval)
 // normalPlan();
 console.log('dummy run')
 console.log('---------------------')
@@ -594,7 +613,5 @@ console.log('---------------------')
 // fastPlan2();
 // console.log('---------------------')
 bestplanpartial();
-
-clearInterval(interval)
 console.timeEnd('1secInterval')
 // fastPlan2();
