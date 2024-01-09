@@ -1,6 +1,7 @@
 import { Bot } from "mineflayer";
+import { SimulationContext } from "./decisions/nfa";
 
-export interface SimContext {
+export interface SimContext extends SimulationContext {
   diamondAxe: number;
   ironAxe: number;
   sticks: number;

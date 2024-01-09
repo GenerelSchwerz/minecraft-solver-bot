@@ -60,69 +60,30 @@ export function craft(item: Item): { itemsRequired: Item[]; recipesToDo: { recip
   return itemsNeeded.reduce(
     (acc, item) => {
       const r = craft(item);
-      return { itemsRequired: acc.itemsRequired.concat(r.itemsRequired as any), recipesToDo: r.recipesToDo.concat(acc.recipesToDo) };
+      return { itemsRequired: acc.itemsRequired.concat(r.itemsRequired), recipesToDo: r.recipesToDo.concat(acc.recipesToDo) };
     },
-    { itemsRequired: [], recipesToDo: [{ recipeApplications: recipeApplications, recipe: firstRecipe }] }
+    { itemsRequired: [] as Item[], recipesToDo: [{ recipeApplications: recipeApplications, recipe: firstRecipe }] }
   );
 }
 
-function randomShit(recipes: PRecipe[], availableItems: Item[], acc: [PRecipe, Item[]][] = []): [PRecipe, Item[]][] {
-  recipes = recipes.reduce((acc, recipe) => {
-    const setDelta = recipe.delta.slice(0, -1).map((e) => ({ id: e.id, count: -e.count }));
-    if (acc.find((r) => r.delta.every((i) => setDelta.findIndex((i1) => i1.id === i.id && i1.count === i.count)))) return acc;
-    acc.push(recipe);
-    return acc;
-  }, [] as PRecipe[]);
-
-  for (const recipe of recipes) {
-    const checking = recipe.delta.slice(0, -1);
-    const notdone = checking.filter((e) => !((availableItems.find((i) => i.id === e.id)?.count ?? 0) >= -e.count));
-
-    if (notdone.length === 0) {
-      console.log("found all items for", itemsMap[recipe.result.id].name);
-      for (const item of recipe.delta) {
-        const i = availableItems.find((e) => e.id === item.id && e.count >= -item.count);
-
-        if (i !== undefined) {
-          // console.log('checking had item', item.id, itemsMap[item.id].name, item.count, checking.map((e) => [e.id, itemsMap[e.id].name, e.count]), availableItems.map((e) => [e.id, itemsMap[e.id].name, e.count]))
-          i.count += item.count; // subtraction
-        } else {
-          // console.log('checking didn not have item', item.id, itemsMap[item.id].name, item.count, checking.map((e) => [e.id, itemsMap[e.id].name, e.count]), availableItems.map((e) => [e.id, itemsMap[e.id].name, e.count]))
-          const index = availableItems.findIndex((e) => e.id === item.id);
-          if (index !== -1) availableItems[index].count += item.count;
-          else availableItems.push({ id: item.id, count: item.count });
-        }
-      }
-      // console.log(availableItems)
-      acc.push([recipe, availableItems]);
-    } else {
-      // console.log(checking.length, notdone.length)
-      // console.log(availableItems.map((e) => [e.id, itemsMap[e.id].name, e.count]))
-      for (const neededItem of notdone) {
-        // console.log("didn't find", itemsMap[neededItem.id].name)
-        const items = structuredClone(availableItems);
-        const r = randomShit(Recipe.find(neededItem.id, null), items, acc);
-        acc.push(...r);
-      }
-    }
-  }
-
-  return acc;
-}
 
 function _newCraft(
   item: Item,
   opts: {
     includeRecursion?: boolean;
+    multipleRecipes?: boolean;
     availableItems?: Item[];
   } = {},
   seen = new Map(),
-  removal = new Set()
+  removal = new Set(),
+  target = item.count
 ): { success: boolean; itemsRequired: Item[]; recipesToDo: { recipeApplications: number; recipe: PRecipe }[] } {
   const id = item.id;
   const recipes = Recipe.find(id, null);
+
   let availableItems = opts.availableItems;
   const includeRecursion = opts.includeRecursion ?? false;
+  const multipleRecipes = opts.multipleRecipes ?? false;
 
   let matchingItem;
   let recipeWanted;
@@ -131,6 +92,11 @@ function _newCraft(
 
   let count = item.count;
 
+  const ret0: Item[] = [];
+  const ret1: {
+    recipeApplications: number;
+    recipe: PRecipe;
+  }[] = [];
 
   if (seen.has(id)) {
     removal.add(id);
@@ -140,12 +106,12 @@ function _newCraft(
   seen.set(id, item);
 
   if (availableItems !== undefined) {
-    matchingItem = availableItems.find((e) => e.id === id && e.count >= count);
+    matchingItem = availableItems.find((e) => e.id === id && e.count >= target);
     if (matchingItem) {
-      if (matchingItem.count >= item.count) {
+      // console.log("already have", itemsMap[id].name, matchingItem.count, count, target);
+      if (matchingItem.count >= target) {
         return { success: true, itemsRequired: [], recipesToDo: [] }; // already have item, no need to craft it.
-      } 
-      else {
+      } else {
         count -= matchingItem.count;
       }
     }
@@ -170,12 +136,23 @@ function _newCraft(
 
       const mostAmt = Math.max(...deltas);
 
+      // store current amount of items available to be crafted
+      let craftedCount = 0;
+
+      // console.log(
+      //   itemsMap[id].name,
+      //   count,
+      //   availableItems.map((e) => [e.id, itemsMap[e.id].name, e.count])
+      // );
+      // console.log(deltas);
+      // console.log(recipes.map((e) => e.delta.map((i) => [i.count, itemsMap[i.id].name])));
+
       outer: for (let i = 0; i < deltas.length; i++) {
         if (deltas[i] !== mostAmt) continue;
 
         // we are going to recurse downwards, so we need to remove items from availableItems as we use them.
-        const newOpts = opts//structuredClone(opts);
-        const currentItems = newOpts.availableItems!;
+        // const opts = opts//structuredClone(opts);
+        const currentItems = opts.availableItems!;
         const recipe = recipes1[i];
         const ingredien = recipe.delta.slice(0, -1);
 
@@ -185,15 +162,16 @@ function _newCraft(
         // store all results for crafting attempts on all ingredients of current recipe
         const results = [];
 
-        
         // const seen = new Map();
         // const removal = new Set();
         // do craft on all ingredients of current recipe
         inner: for (const ing of ingredients) {
-          const data = _newCraft({ id: ing.id, count: -ing.count }, newOpts, seen, removal);
-          if (data.success === false) break inner;
+          const data = _newCraft({ id: ing.id, count: -ing.count }, opts, seen, removal);
+          if (data.success === false) continue inner;
           results.push(data);
 
+          // ret0.push(...item1.recipe.delta);
+          ret1.push(...data.recipesToDo);
           // if we successfully crafted an item, remove the ingredients from availableItems
           for (const item1 of data.recipesToDo) {
             // const recipeApplications = Math.ceil(count / item1.recipe.result.count);
@@ -202,7 +180,7 @@ function _newCraft(
               const item = item1.recipe.delta[j];
               const index = currentItems!.findIndex((e) => e.id === item.id);
               if (index !== -1) {
-                currentItems![index].count += item.count * item1.recipeApplications ;
+                currentItems![index].count += item.count * item1.recipeApplications;
               } else {
                 currentItems!.push({ id: item.id, count: item.count * item1.recipeApplications });
               }
@@ -213,52 +191,100 @@ function _newCraft(
         // if we successfully crafted all ingredients, we can craft this recipe
         if (results.length === ingredients.length) {
           // with our available items properly managed now, we can do the standard crafting option.
-          const test = _newCraft({ id: id, count: count }, newOpts, seen, removal);
 
-          if (test.success === false) {
-            continue outer;
+          let test;
+          let attemptCount = count - craftedCount;
+          tester: for (; attemptCount > 0; attemptCount--) {
+            // console.log("attempted", attemptCount);
+            const newopts = opts;
+            const test1 = _newCraft({ id: id, count: attemptCount }, newopts, seen, removal, target);
+            // console.log(
+            //   attemptCount,
+            //   test1.success,
+            //   test1.itemsRequired.map((e) => [e.id, itemsMap[e.id].name, e.count]),
+            //   newopts.availableItems?.map((e) => [e.id, itemsMap[e.id].name, e.count])
+            // );
+            if (test1.success === true) {
+              test = test1;
+              craftedCount += attemptCount;
+              // console.log("crafted", craftedCount);
+              break tester;
+            }
           }
 
-          console.log('hey')
+          // console.log(test, count, craftedCount,  currentItems.map((e) => [e.id, itemsMap[e.id].name, e.count]))
+          if (test === undefined) continue outer;
 
-          const items = results.flatMap((e) => e.itemsRequired);
-          items.push(...test.itemsRequired);
+          // const items = results.flatMap((e) => e.itemsRequired);
+          ret0.push(...test.itemsRequired);
 
-          const recipesToDo = results.flatMap((e) => e.recipesToDo);
-          recipesToDo.push(...test.recipesToDo);
+          // const recipesToDo = results.flatMap((e) => e.recipesToDo);
+          ret1.push(...test.recipesToDo);
 
           for (const toDo of test.recipesToDo) {
-            for (const item of toDo.recipe.delta) {
-              const index = currentItems.findIndex((e) => e.id === item.id);
+            for (const ing of toDo.recipe.delta) {
+              const index = currentItems.findIndex((e) => e.id === ing.id);
+              const num = (currentItems[index]?.count ?? 0) + ing.count * toDo.recipeApplications;
+              if (num < 0) {
+                // console.log("failed here:", toDo.recipe.delta.map((i) => [i.count, itemsMap[i.id].name]) , toDo.recipeApplications, availableItems.map((e) => [e.id, itemsMap[e.id].name, e.count]), currentItems.map((e) => [e.id, itemsMap[e.id].name, e.count]))
+                // const new1 = {id: ing.id, count: -num * toDo.recipeApplications}
+                return { success: false, itemsRequired: [item], recipesToDo: [] };
+              }
               if (index !== -1) {
-                currentItems[index].count += item.count * toDo.recipeApplications ;
+                currentItems[index].count += ing.count * toDo.recipeApplications;
               } else {
-                currentItems.push({ id: item.id, count: item.count * toDo.recipeApplications  });
+                currentItems.push({ id: ing.id, count: ing.count * toDo.recipeApplications });
               }
             }
           }
 
+          // console.log(
+          //   "hey",
+          //   ret0.map((e) => [e.id, itemsMap[e.id].name, e.count])
+          // );
+          // console.log(
+          //   "hey1",
+          //   ret1.map((e) => [e.recipe.delta.map((i) => [i.count, itemsMap[i.id].name]), e.recipeApplications])
+          // );
+
+          // console.log(
+          //   craftedCount,
+          //   count,
+          //   currentItems.map((e) => [e.id, itemsMap[e.id].name, e.count])
+          // );
+
+          if (craftedCount !== count) {
+            continue outer;
+          }
+
           return {
             success: true,
-            itemsRequired: items,
-            recipesToDo: recipesToDo,
+            itemsRequired: ret0,
+            recipesToDo: ret1,
           };
         }
       }
 
       // TODO can implement partial completion of recipes here.
       if (!recipeWanted) {
-        const hasNoRecipes = (recipes.length == 0 || gettableItems.indexOf(id) != -1)
-        const weHaveItem = availableItems.find((e) => e.id === id && e.count >= count)
+        const hasNoRecipes = recipes.length == 0 || gettableItems.indexOf(id) != -1;
+        const weHaveItem = availableItems.find((e) => e.id === id && e.count >= count);
         if (hasNoRecipes && weHaveItem) {
           // console.log("no recipe for ", itemsMap[item.id].name, "returning as is");
-          return { success: true, itemsRequired: [item], recipesToDo: [] };
-        } else { //if (hasNoRecipes && !weHaveItem) {
-          // console.log("no recipe for ", itemsMap[item.id].name, "and dont have");
-          return { success: false, itemsRequired: [item], recipesToDo: [] };
-        // } else {
-        //   console.log("no recipe for ", itemsMap[item.id].name, "but have ingredients", availableItems?.map((e) => [e.id, itemsMap[e.id].name, e.count]), count);
-        //   recipeWanted = recipes[0];
+          return { success: true, itemsRequired: [], recipesToDo: [] };
+        } else {
+          if (!multipleRecipes || (hasNoRecipes && !weHaveItem)) {
+            // console.log("no recipe for ", itemsMap[item.id].name, "and dont have");
+            const new1 = { id: id, count: count - craftedCount };
+            return { success: false, itemsRequired: [new1], recipesToDo: [] };
+          } else {
+            const data = _newCraft({ id: id, count: count - craftedCount }, opts, seen, removal, target);
+            return {
+              success: data.success,
+              itemsRequired: ret0.concat(data.itemsRequired),
+              recipesToDo: ret1.concat(data.recipesToDo),
+            };
+          }
         }
       }
     }
@@ -268,7 +294,7 @@ function _newCraft(
     recipeWanted = recipes[0];
 
     if (recipes.length == 0 || gettableItems.indexOf(id) != -1) {
-      console.log("no recipe for ", itemsMap[item.id].name);
+      // console.log("no recipe for ", itemsMap[item.id].name);
       return { success: true, itemsRequired: [item], recipesToDo: [] };
     }
   }
@@ -278,14 +304,14 @@ function _newCraft(
   const ret = itemsNeeded.reduce(
     (acc, item) => {
       const r = _newCraft(item, opts, seen, removal);
-      console.log(r.success)
-      if (r.success === false && !includeRecursion) return { success: false, itemsRequired: acc.itemsRequired, recipesToDo: acc.recipesToDo };
-      
+      // console.log(r.success);
+      // if (r.success === false && !includeRecursion) return { success: false, itemsRequired: acc.itemsRequired, recipesToDo: acc.recipesToDo };
+
       return {
         success: acc.success && r.success,
         itemsRequired: r.itemsRequired.concat(acc.itemsRequired),
         recipesToDo: r.recipesToDo.concat(acc.recipesToDo),
-      } as any;
+      };
     },
     { success: true, itemsRequired: [] as Item[], recipesToDo: [{ recipeApplications: recipeApplications, recipe: recipeWanted }] }
   );
@@ -299,13 +325,19 @@ function _newCraft(
 
   // console.log("found", itemsMap[id].name, availableItems);
   seen.clear();
-  return ret;
+
+  return {
+    success: ret.success,
+    itemsRequired: ret.itemsRequired.concat(ret0),
+    recipesToDo: ret.recipesToDo.concat(ret1),
+  };
 }
 
 function newCraft(
   item: Item,
   opts: {
     includeRecursion?: boolean;
+    multipleRecipes?: boolean;
     availableItems?: Item[];
   } = {}
 ) {
@@ -313,7 +345,10 @@ function newCraft(
   const removal = new Set();
   const ret = _newCraft(item, opts, seen, removal);
 
-  console.log(ret)
+  const multipleRecipes = opts.multipleRecipes ?? false;
+  // due to multiple recipes, preserve order of items required.
+  if (multipleRecipes) return ret; 
+
 
   const ref = ret.recipesToDo;
 
@@ -347,6 +382,7 @@ function newCraft(
     const producedIndex = ret.recipesToDo.findIndex((r) => r.recipe.result.id === item.id);
     if (ingredientIndex !== -1 && producedIndex !== -1) {
       const resultItem = ret.recipesToDo[ingredientIndex].recipe.result;
+      resultItem.count *= ret.recipesToDo[ingredientIndex].recipeApplications;
       ret.recipesToDo.splice(ingredientIndex, 1);
       ret.itemsRequired.splice(index2, 1, resultItem);
     }
@@ -357,16 +393,17 @@ function newCraft(
 
 const opts = {
   includeRecursion: false,
+  multipleRecipes: true,
   availableItems: [
     // { id: itemsByName.stick.id, count: 8 },
-    { id: itemsByName.spruce_log.id, count: 3 },
-    { id: itemsByName.iron_ingot.id, count: 3 },
-    // { id: itemsByName.iron_block.id, count: 1 },
+    { id: itemsByName.spruce_log.id, count: 5 },
+    { id: itemsByName.iron_ingot.id, count: 9+12 },
+    { id: itemsByName.iron_block.id, count: 9 },
   ],
 };
-const data = newCraft({ id: itemsByName.iron_pickaxe.id, count: 3 }, opts);
+const data = newCraft({ id: itemsByName.iron_pickaxe.id, count: 20 }, opts);
 
-console.log(data.success)
+console.log(data.success);
 console.log(
   data.recipesToDo.map((r) => {
     return { count: r.recipeApplications, recipes: r.recipe.delta.flatMap((d) => [itemsMap[d.id].name, d.count]) };
@@ -379,11 +416,12 @@ console.log(
   })
 );
 
-console.log(
-  opts.availableItems.map((d) => {
-    return { name: itemsMap[d.id].name, count: d.count };
-  })
-);
+if ((opts as any).availableItems)
+  console.log(
+    (opts as any).availableItems.map((d: any) => {
+      return { name: itemsMap[d.id].name, count: d.count };
+    })
+  );
 const data1 = craft({ id: itemsByName.wooden_sword.id, count: 1 });
 
 // console.log(
@@ -393,7 +431,13 @@ const data1 = craft({ id: itemsByName.wooden_sword.id, count: 1 });
 // );
 // console.log(data1.itemsRequired.map((e) => { return {id: e.id, name: itemsMap[e.id].name, count: e.count}}));
 
-// blocks.concat(items).forEach((item: any) => newCraft({ id: item.id, count: 1 }));
+console.time("hi");
+blocks.concat(items).forEach((item: any) => {
+  const res = newCraft({ id: item.id, count: 1 }
+    )
+    if (res.success === false) throw "fuck"
+  });
 
+  console.timeEnd("hi")
 // console.log("hi", Object.values(postProcess(data)).map((e) => Object.values(e).map(e=>[e.name, postProcess(data)[e]])));
 export const sleep = setTimeout;

@@ -153,7 +153,30 @@ function createSimContextFromContext(ctx: Context): SimContext {
             diamonds: {
                 ironPickaxe: diamondOreBlock.digTime(ironPickaxeItem.type, false, false, false),
                 diamondPickaxe: diamondOreBlock.digTime(diamondPickaxeItem.type, false, false, false),
-            }
+            },
+        },
+        clone: function() { 
+          return {
+            // copy all the fields
+            dirt: this.dirt,
+            wood: this.wood,
+            woodenAxe: this.woodenAxe,
+            woodenPickaxe: this.woodenPickaxe,
+            stone: this.stone,
+            stoneAxe: this.stoneAxe,
+            stonePickaxe: this.stonePickaxe,
+            iron: this.iron,
+            ironOre: this.ironOre,
+            ironAxe: this.ironAxe,
+            ironPickaxe: this.ironPickaxe,
+            diamonds: this.diamonds,
+            diamondAxe: this.diamondAxe,
+            diamondPickaxe: this.diamondPickaxe,
+            sticks: this.sticks,
+            furnace: this.furnace,
+            digTimes: this.digTimes,
+            clone: this.clone,
+          }
         }
     }
 }
