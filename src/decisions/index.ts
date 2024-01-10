@@ -2,6 +2,7 @@ import { v4 } from "uuid";
 import { StrictEventEmitter } from "strict-event-emitter-types";
 import { EventEmitter } from "events";
 import { SimulationContext } from "./nfa";
+import { levensteinDistance } from "../utils";
 
 function isSubClassOf<T extends new (...args: any[]) => any>(child: T, parent: T) {
   return child === parent && child.prototype instanceof parent;
@@ -21,6 +22,25 @@ export function findAllChildren(node: LogicNode, set = new Set<LogicNode>()): Se
     findAllChildren(child, set);
   }
   return set;
+}
+
+/**
+ * Find child with closest matching name.
+ * @param node 
+ * @param name 
+ */
+export function findChild(node: LogicNode, name: string): LogicNode {
+   const children = findAllChildren(node);
+    let closestMatch!: LogicNode;
+    let closestMatchDistance: number = Infinity;
+    for (const child of children) {
+      const dist = levensteinDistance(child.name, name);
+      if (dist < closestMatchDistance) {
+        closestMatch = child;
+        closestMatchDistance = dist;
+      }
+    }
+    return closestMatch;
 }
 
 export function findPathsToBeginning(
@@ -84,9 +104,14 @@ export abstract class LogicNode<SimContext extends SimulationContext = Simulatio
   abstract name: string;
 
   private _cachedConsider: boolean = true;
+  private _finished: boolean = false;
 
   public get cachedConsider(): boolean {
     return this._cachedConsider;
+  }
+
+  public get finished(): boolean {
+    return this._finished;
   }
 
   public readonly immediateReturn: boolean = false;
@@ -115,6 +140,11 @@ export abstract class LogicNode<SimContext extends SimulationContext = Simulatio
   simExit?(ctx: SimContext): void;
 
   onEnter?(ctx: Context): Promise<void> | void;
+
+  _onEnter(ctx: Context): Promise<void> | void {
+    this._finished = false;
+    return this.onEnter?.(ctx);
+  }
 
   onExit?(ctx: Context): Promise<void> | void;
 
@@ -154,6 +184,11 @@ export abstract class LogicNode<SimContext extends SimulationContext = Simulatio
 
   isFinished(ctx: Context): boolean {
     return true;
+  }
+
+  _isFinished(ctx: Context): boolean {
+    this._finished = this.isFinished(ctx)
+    return this._finished;
   }
 
   isFailed(ctx: Context): boolean {

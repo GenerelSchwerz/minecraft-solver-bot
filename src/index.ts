@@ -9,7 +9,7 @@ import { WeightedNFAHandler, WeightedNFAPlanner } from "./decisions/nfa";
 
 import { default as PBlock } from 'prismarine-block'
 import { Item , default as PItem } from 'prismarine-item'
-import { LogicNode } from "./decisions";
+import { LogicNode, findChild } from "./decisions";
 import { printInventory } from "./utils";
 import { buildCraftingMachine } from "./statemachines/craft";
 
@@ -200,11 +200,7 @@ bot.on("chat", async (username, message) => {
   if (username === bot.username) return
   const [command, ...args] = message.split(" ");
   switch (command) {
-    case "test1":
-      bot.chat("test1");
-      break;
-
-    case "teststate":
+    case "test":
         const itemWanted = args[0];
         const maxDistance = parseInt(args[1] ?? "16");
         const item = Object.values(bot.registry.itemsByName as mdItem[]).find(i=>i.name === (itemWanted));
@@ -214,24 +210,22 @@ bot.on("chat", async (username, message) => {
         }
 
 
-        const fns = bot.listeners('physicsTick')
 
         bot.chat('trying to craft ' + item.displayName + ' at ' + maxDistance)
 
         if (stateMachine!== null) stateMachine.stop();
 
-        const machine = buildCraftingMachine(bot, item.id, null, maxDistance);
-        stateMachine = new BotStateMachine({bot, root: machine, data: {}, autoStart: false});
+        const root = buildCraftingMachine(bot, item.id, null, maxDistance);
+        stateMachine = new BotStateMachine({bot, root});
         stateMachine.start();
         webserver.loadStateMachine(stateMachine);
-        stateMachine.on('stateEntered', (type, cls, newState) => console.log(newState.stateName, newState.name, newState.constructor.name))
-        
-        // const webserver = new StateMachineWebserver({ stateMachine });
-        // webserver.startServer();
-        break
-    case "wood":
 
-        const target = craftSticksNode;
+
+        break
+    case "logic":
+
+        
+        const target = findChild(entryNode, args[0]);
         const sc = createSimContextFromContext(bot);
 
         const handler = new WeightedNFAHandler(bot, sc);
@@ -244,8 +238,8 @@ bot.on("chat", async (username, message) => {
         const listener = () => {
             handler.update();
             const cur = handler.currentNode;
-            if (cur === target) {
-                bot.chat("done!");
+            if (cur === target && target.finished) {
+                bot.chat("done with entire path!");
                 bot.off('physicsTick', listener)
                 return;
             };
@@ -255,7 +249,7 @@ bot.on("chat", async (username, message) => {
             prev = cur;
         }
 
-
+        bot.chat('starting logic test for ' + target.name)
         bot.on('physicsTick', listener)
       break;
     case 'inv':

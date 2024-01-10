@@ -173,15 +173,6 @@ function reverseNodeChildren<SC extends SimulationContext, C>(root: LogicNode<SC
   // );
 }
 
-function findChild(root: LogicNode, targetName: string, maxDepth = 0, depth = 0): LogicNode | null {
-  if (depth >= maxDepth) return null;
-  for (const child of root.children) {
-    if (child.name === targetName) return child;
-    const found = findChild(child, targetName, maxDepth, depth + 1);
-    if (found) return found;
-  }
-  return null;
-}
 
 /**
  * Breadth-first search for min depth of node from root.
@@ -1288,7 +1279,7 @@ export class WeightedNFAHandler<SC extends SimulationContext, C = unknown> {
   get done() {
     if (!this._currentPath) return true;
     if (this._currentPath.nodes.length === 0) return true;
-    return this._currentNode === this._end;
+    return this._currentNode === this._end && this._currentNode.finished;
   }
 
   get handlingInterrupt() {
@@ -1296,6 +1287,7 @@ export class WeightedNFAHandler<SC extends SimulationContext, C = unknown> {
   }
 
   clear() {
+    console.log('we did it!')
     delete this._currentPath;
   }
 
@@ -1338,7 +1330,7 @@ export class WeightedNFAHandler<SC extends SimulationContext, C = unknown> {
 
     if (!node.isAlreadyCompleted(this.simContextLive)) {
       this._currentNode.simEnter?.(this.simContextLive);
-      this._currentNode.onEnter?.(this.context);
+      this._currentNode._onEnter?.(this.context);
     }
     this._currentNode.emit("entered");
   }
@@ -1373,7 +1365,7 @@ export class WeightedNFAHandler<SC extends SimulationContext, C = unknown> {
       throw new Error("interrupt node failed");
     }
 
-    if (this._currentNode.isFinished(this._context)) {
+    if (this._currentNode._isFinished(this._context)) {
       if (!this._prevNode) throw new Error("no previous node");
       this.enterNode(this._prevNode);
       return;
@@ -1381,7 +1373,7 @@ export class WeightedNFAHandler<SC extends SimulationContext, C = unknown> {
   }
 
   update() {
-    if (this.done) return console.log("hey");
+    if (this.done) return;
     if (!this._currentPath) throw new Error("not initialized");
     if (!this._currentNode) {
       this.enterNode(this._currentPath.nodes[0]);
@@ -1398,8 +1390,9 @@ export class WeightedNFAHandler<SC extends SimulationContext, C = unknown> {
       return;
     }
 
+    console.log(this._currentNode.name , this._currentNode.isFinished(this._context), this._currentNode.isFailed(this._context))
     if (this._currentNode.isFinished(this._context)) {
-      console.log("finished");
+      
       if (this._currentNode === this._end) {
         this.exitNode(this._currentNode);
         this.clear();

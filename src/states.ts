@@ -127,6 +127,7 @@ export class CollectWoodNode extends Node {
   async onEnter(ctx: Bot): Promise<void> {
     this.loadBlocksAndItems(ctx);
 
+    console.log('hi')
     const inInventory = () =>
       ctx.inventory
         .items()
@@ -134,8 +135,8 @@ export class CollectWoodNode extends Node {
         .reduce((acc, item) => acc + item.count, 0);
 
    
-    this.collectedNum = inInventory();
-    this.slotListener = () => { this.collectedNum = inInventory() };
+    const startNum = inInventory();
+    this.slotListener = () => { this.collectedNum = inInventory() - startNum };
     ctx.inventory.on("updateSlot", this.slotListener);
     
 
