@@ -15,6 +15,7 @@ import { buildCraftingMachine } from "./statemachines/craft";
 
 import {Item as mdItem} from 'minecraft-data'
 import { BotStateMachine, StateMachineWebserver } from "@nxg-org/mineflayer-static-statemachine";
+import crafter from 'mineflayer-crafting-util'
 
 const entryNode = new states.EntryNode<SimContext, Context>();
 const interruptNode = new states.InterruptNode<SimContext, Context>();
@@ -33,33 +34,20 @@ const craftIronAxeNode = new states.CraftIronAxeNode();
 const craftIronPickaxeNode = new states.CraftIronPickaxeNode();
 const craftDiamondPickaxeNode = new states.CraftDiamondPickaxeNode();
 const craftDiamondAxeNode = new states.CraftDiamondAxeNode();
-const craftSticksNode = new states.CraftSticksNode(1);
+const craftPlanksNode = new states.CraftPlanksNode(1);
+const craftSticksNode = new states.CraftSticksNode(2);
 const craftFurnaceNode = new states.CraftFurnaceNode();
 
 const smeltIronNode = new states.SmeltIronNode(1);
 
 entryNode.addChildren(
-  craftDiamondPickaxeNode,
-  craftDiamondAxeNode,
-  craftIronPickaxeNode,
-  craftIronAxeNode,
-  craftStonePickaxeNode,
-  craftStoneAxeNode,
-  craftWoodenPickaxeNode,
-  craftWoodenAxeNode,
-
-  craftSticksNode,
   collectDirtNode,
-  collectStoneNode,
   collectWoodNode,
-  collectIronNode,
-  collectDiamondNode,
-
-  craftFurnaceNode
 );
 
 collectDirtNode.addChildren(collectDirtNode);
-collectWoodNode.addChildren(collectWoodNode, craftSticksNode);
+collectWoodNode.addChildren(collectWoodNode, craftPlanksNode, craftSticksNode);
+
 collectStoneNode.addChildren(collectStoneNode, craftFurnaceNode, craftStoneAxeNode, craftStonePickaxeNode);
 collectIronNode.addChildren(collectIronNode, craftFurnaceNode);
 collectDiamondNode.addChildren(collectDiamondNode, craftDiamondPickaxeNode);
@@ -71,6 +59,12 @@ craftIronPickaxeNode.addChildren(collectDiamondNode);
 craftIronAxeNode.addChildren(collectWoodNode);
 craftDiamondPickaxeNode.addChildren(collectDiamondNode);
 craftDiamondAxeNode.addChildren(collectWoodNode);
+
+craftPlanksNode.addChildren(
+  craftSticksNode,
+  craftWoodenAxeNode,
+  craftWoodenPickaxeNode
+)
 
 craftSticksNode.addChildren(
   craftWoodenAxeNode,
@@ -108,7 +102,7 @@ function createSimContextFromContext(ctx: Context): SimContext {
 
     return {
         dirt: ctx.inventory.items().filter((item) => item.name === "dirt").reduce((acc, item) => acc + item.count, 0),
-        wood: ctx.inventory.items().filter((item) => item.name.includes('log')).reduce((acc, item) => acc + item.count, 0),
+        logs: ctx.inventory.items().filter((item) => item.name.endsWith('_log')).reduce((acc, item) => acc + item.count, 0),
         woodenAxe: ctx.inventory.items().filter((item) => item.name === "wooden_axe").reduce((acc, item) => acc + item.count, 0),
         woodenPickaxe: ctx.inventory.items().filter((item) => item.name === "wooden_pickaxe").reduce((acc, item) => acc + item.count, 0),
         stone: ctx.inventory.items().filter((item) => item.name === "stone").reduce((acc, item) => acc + item.count, 0),
@@ -122,6 +116,7 @@ function createSimContextFromContext(ctx: Context): SimContext {
         diamondAxe: ctx.inventory.items().filter((item) => item.name === "diamond_axe").reduce((acc, item) => acc + item.count, 0),
         diamondPickaxe: ctx.inventory.items().filter((item) => item.name === "diamond_pickaxe").reduce((acc, item) => acc + item.count, 0),
         sticks: ctx.inventory.items().filter((item) => item.name === "stick").reduce((acc, item) => acc + item.count, 0),
+        planks: ctx.inventory.items().filter((item)=>item.name.endsWith("_planks")).reduce((acc,item)=> acc+item.count, 0),
         furnace: ctx.inventory.items().filter((item) => item.name === "furnace").reduce((acc, item) => acc + item.count, 0),
 
         digTimes: {
@@ -159,7 +154,7 @@ function createSimContextFromContext(ctx: Context): SimContext {
           return {
             // copy all the fields
             dirt: this.dirt,
-            wood: this.wood,
+            logs: this.logs,
             woodenAxe: this.woodenAxe,
             woodenPickaxe: this.woodenPickaxe,
             stone: this.stone,
@@ -173,6 +168,7 @@ function createSimContextFromContext(ctx: Context): SimContext {
             diamondAxe: this.diamondAxe,
             diamondPickaxe: this.diamondPickaxe,
             sticks: this.sticks,
+            planks: this.planks,
             furnace: this.furnace,
             digTimes: this.digTimes,
             clone: this.clone,
@@ -191,10 +187,14 @@ const bot = createBot({
 bot.on('spawn', () => {
   const movements = new Movements(bot)
   bot.loadPlugin(pathfinder)
+  bot.loadPlugin(crafter)
   bot.pathfinder.setMovements(movements)
 })
 
-let ws: StateMachineWebserver | null = null;
+const webserver = new StateMachineWebserver({})
+webserver.startServer();
+
+let stateMachine: BotStateMachine<any, any> | null = null;
 
 bot.on("chat", async (username, message) => {
   if (username === bot.username) return
@@ -218,11 +218,14 @@ bot.on("chat", async (username, message) => {
 
         bot.chat('trying to craft ' + item.displayName + ' at ' + maxDistance)
 
+        if (stateMachine!== null) stateMachine.stop();
 
         const machine = buildCraftingMachine(bot, item.id, null, maxDistance);
-        const stateMachine = new BotStateMachine({bot, root: machine, data: {}, autoStart: false});
+        stateMachine = new BotStateMachine({bot, root: machine, data: {}, autoStart: false});
         stateMachine.start();
-        // stateMachine.on('stateEntered', (type, cls, newState) => console.log(newState.stateName))
+        webserver.loadStateMachine(stateMachine);
+        stateMachine.on('stateEntered', (type, cls, newState) => console.log(newState.stateName, newState.name, newState.constructor.name))
+        
         // const webserver = new StateMachineWebserver({ stateMachine });
         // webserver.startServer();
         break

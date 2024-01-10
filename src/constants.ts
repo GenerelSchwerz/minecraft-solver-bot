@@ -15,7 +15,8 @@ export interface SimContext extends SimulationContext {
   dirt: number;
   woodenPickaxe: number;
   stone: number;
-  wood: number;
+  logs: number;
+  planks: number;
   woodenAxe: number;
   stoneAxe: number;
 

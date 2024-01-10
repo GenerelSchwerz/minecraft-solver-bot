@@ -107,7 +107,7 @@ export class CollectWoodNode extends Node {
   // simulation steps
 
   simExit(ctx: SimContext): void {
-    ctx.wood += this.amt;
+    ctx.logs += this.amt;
   }
 
   calculateCost(ctx: SimContext): number {
@@ -252,44 +252,80 @@ export class CollectDirtNode extends Node {
   }
 }
 
-export class CraftSticksNode extends Node {
-  name = "craftSticks";
+export class CraftPlanksNode extends Node {
+  name = "craftPlanks";
 
   constructor(public woodAmt: number) {
     super();
   }
 
   shouldEnter(ctx: SimContext): boolean {
-    return ctx.wood >= Math.ceil(this.woodAmt);
+    return ctx.logs >= Math.ceil(this.woodAmt);
   }
 
   simExit(ctx: SimContext): void {
-    ctx.wood -= this.woodAmt;
-    ctx.sticks += this.woodAmt * 8;
+    ctx.logs -= this.woodAmt;
+    ctx.planks += this.woodAmt * 4;
   }
 
   async onEnter(ctx: Bot): Promise<void> {
-    const logItem = ctx.inventory.items().find((item) => item.name.includes("log"));
-    if (!logItem) throw new Error("no wood");
+    const i = ctx.inventory.items().find(i=>i.name.endsWith("_log"))
+    if (!i) {
+      await ctx.chat('cannot craft logs')
+      console.error('yay')
+      throw new Error('cannot craft logs')
+    }
+    const newName = i.name.split('_')[0].concat('_planks')
+    console.log(newName)
 
-    const wantedPlankName = logItem.name.split("_")[0] + "_planks";
+    const id = ctx.registry.itemsByName[newName].id
 
-    const plank = (Object.values(ctx.registry.itemsByName) as mdItem[]).find((item) => item.name === wantedPlankName);
-   
-    if (!plank) throw new Error("no planks to craft");
-    
-    const recipes0 = ctx.recipesFor(plank.id, null, 0, false);
- 
-    if (recipes0.length === 0) throw new Error("no recipes for planks");
+    const plan = ctx.planCraftInventory({id: id, count: 1})
+    if (!plan.success) {
+      await ctx.chat('Plan does not work')
+      console.error(plan)
+      throw new Error('shit')
+    }
 
-    await ctx.craft(recipes0[0], this.woodAmt);
+    for (const info of plan.recipesToDo) {
+      await ctx.craft(info.recipe, info.recipeApplications)
+    }
 
-    await ctx.waitForTicks(10);
+    await ctx.chat('done')
+  }
+}
 
-    const recipes1 = ctx.recipesFor(ctx.registry.itemsByName.stick.id, null, 0, null);
- 
-    if (recipes1.length === 0) throw new Error("no recipes for sticks");
-    await ctx.craft(recipes1[0], 1);
+export class CraftSticksNode extends Node {
+  name = "craftSticks";
+
+  constructor(public woodAmt: number) {
+    super();
+
+    if (woodAmt % 2 === 1) throw new Error('Wood amount must be divisible by two')
+  }
+
+  shouldEnter(ctx: SimContext): boolean {
+    return ctx.logs >= Math.ceil(this.woodAmt);
+  }
+
+  simExit(ctx: SimContext): void {
+    ctx.planks -= this.woodAmt;
+    ctx.sticks += this.woodAmt * 2;
+  }
+
+  async onEnter(ctx: Bot): Promise<void> {
+    const plan = ctx.planCraftInventory({id: ctx.registry.itemsByName.stick.id, count: 1})
+    if (!plan.success) {
+      await ctx.chat('Plan does not work')
+      console.error(plan)
+      throw new Error('shit')
+    }
+
+    for (const info of plan.recipesToDo) {
+      await ctx.craft(info.recipe, info.recipeApplications)
+    }
+
+    await ctx.chat('done')
   }
 }
 
@@ -301,12 +337,12 @@ export class CraftWoodenAxeNode extends Node {
   }
 
   shouldEnter(ctx: SimContext): boolean {
-    return ctx.wood >= 3 && ctx.sticks >= 2;
+    return ctx.logs >= 3 && ctx.sticks >= 2;
   }
 
   simExit(ctx: SimContext): void {
     ctx.woodenAxe++;
-    ctx.wood -= 3;
+    ctx.logs -= 3;
     ctx.sticks -= 2;
   }
 }
@@ -319,12 +355,12 @@ export class CraftWoodenPickaxeNode extends Node {
   }
 
   shouldEnter(ctx: SimContext): boolean {
-    return ctx.wood >= 3 && ctx.sticks >= 2;
+    return ctx.logs >= 3 && ctx.sticks >= 2;
   }
 
   simExit(context: SimContext): void {
     context.woodenPickaxe++;
-    context.wood -= 3;
+    context.logs -= 3;
     context.sticks -= 2;
   }
 }
@@ -473,11 +509,11 @@ export class SmeltIronNode extends Node {
   }
 
   shouldEnter(ctx: SimContext): boolean {
-    return ctx.wood >= this.woodAmt && ctx.ironOre >= this.amt && ctx.furnace > 0;
+    return ctx.logs >= this.woodAmt && ctx.ironOre >= this.amt && ctx.furnace > 0;
   }
 
   simExit(context: SimContext): void {
-    context.wood -= this.woodAmt;
+    context.logs -= this.woodAmt;
     context.ironOre -= this.amt;
     context.iron += this.amt;
   }

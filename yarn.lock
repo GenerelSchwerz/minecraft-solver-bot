@@ -2,24 +2,24 @@
 # yarn lockfile v1
 
 
-"@azure/msal-common@14.5.0":
-  version "14.5.0"
-  resolved "https://registry.yarnpkg.com/@azure/msal-common/-/msal-common-14.5.0.tgz#5a891e5f8eaf23f598bdb4e285e938fb606cd716"
-  integrity sha512-Gx5rZbiZV/HiZ2nEKfjfAF/qDdZ4/QWxMvMo2jhIFVz528dVKtaZyFAOtsX2Ak8+TQvRsGCaEfuwJFuXB6tu1A==
+"@azure/msal-common@14.6.0":
+  version "14.6.0"
+  resolved "https://registry.yarnpkg.com/@azure/msal-common/-/msal-common-14.6.0.tgz#3a565f94e810a67ecbaa2cd8250e658876af8329"
+  integrity sha512-AGusT/JvxdzJIYi5u0n97cmhd3pUT6UuI6rEkT5iDeT2FGcV0/EB8pk+dy6GLPpYg9vhDCuyoYrEZGd+2UeCCQ==
 
 "@azure/msal-node@^2.0.2":
-  version "2.6.0"
-  resolved "https://registry.yarnpkg.com/@azure/msal-node/-/msal-node-2.6.0.tgz#44bad20a1523c92d79de24fb225da86abaeedb6c"
-  integrity sha512-RWAWCYYrSldIYC47oWtofIun41e6SB9TBYgGYsezq6ednagwo9ZRFyRsvl1NabmdTkdDDXRAABIdveeN2Gtd8w==
+  version "2.6.1"
+  resolved "https://registry.yarnpkg.com/@azure/msal-node/-/msal-node-2.6.1.tgz#097f2def63b70acb11a84ee74d6989ba2315f4af"
+  integrity sha512-wYwz83pWatTNWUCkTi3cAOXbchad5FnZz/pbZz7b8Z6FuEqohXcTtg6BLip9SmcjN6FlbwUdJIZYOof2v1Gnrg==
   dependencies:
-    "@azure/msal-common" "14.5.0"
+    "@azure/msal-common" "14.6.0"
     jsonwebtoken "^9.0.0"
     uuid "^8.3.0"
 
-"@nxg-org/mineflayer-static-statemachine@0.1.8":
-  version "0.1.8"
-  resolved "https://registry.yarnpkg.com/@nxg-org/mineflayer-static-statemachine/-/mineflayer-static-statemachine-0.1.8.tgz#5f13dbf72d8ac14a82c7c2a6db89bd1d89ecc351"
-  integrity sha512-mlQgQE8Lohfbhj5OagRMTko0r0Gtz2k+MdelbEY9yQvQ/sAkB03tcwKqbrLgqmZI+yveoDpmIgx7cSZXTrWelg==
+"@nxg-org/mineflayer-static-statemachine@0.2.5":
+  version "0.2.5"
+  resolved "https://registry.yarnpkg.com/@nxg-org/mineflayer-static-statemachine/-/mineflayer-static-statemachine-0.2.5.tgz#e2ad9b0264076e440eb641db7a50507421e37527"
+  integrity sha512-aklZszObipH9jpKL5eGVS0klL4ywGde+5DV5hRrB2AuFNOG/FI2RDxaRuIrKZjL4/UJDiByKuZH4oVcCBKOQ1A==
   dependencies:
     express "^4.17.2"
     node "^19.1.0"
@@ -44,9 +44,9 @@
     "@types/node" "*"
 
 "@types/node@*", "@types/node@>=10.0.0":
-  version "20.10.6"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.10.6.tgz#a3ec84c22965802bf763da55b2394424f22bfbb5"
-  integrity sha512-Vac8H+NlRNNlAmDfGUP7b5h/KA+AtWIzuXy0E6OyP8f1tCLYAtPvKRRDJjAPqhpCb0t6U2j7/xqAuLEebW2kiw==
+  version "20.10.8"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-20.10.8.tgz#f1e223cbde9e25696661d167a5b93a9b2a5d57c7"
+  integrity sha512-f8nQs3cLxbAFc00vEU59yf9UyGUftkPaLGfvbVOIDdx2i1b8epBqj2aNGyP19fiyXWvlmZ7qC1XLjAzw/OKIeA==
   dependencies:
     undici-types "~5.26.4"
 
@@ -632,9 +632,9 @@ mime@1.6.0:
   integrity sha512-x0Vn8spI+wuJ1O6S7gnbaQg8Pxh4NNHb7KSINmEWKiPE4RKOplvijn+NkmYmmRgP68mc70j2EbeTFRsrswaQeg==
 
 minecraft-data@^3.0.0, minecraft-data@^3.38.0, minecraft-data@^3.44.0, minecraft-data@^3.5.1, minecraft-data@^3.53.0:
-  version "3.59.0"
-  resolved "https://registry.yarnpkg.com/minecraft-data/-/minecraft-data-3.59.0.tgz#ba51efca96f5533076e9594ba5139bafd30cacc3"
-  integrity sha512-XVcO54efqLER/zUl1v2A8ZvGzLG4Ndz1JJ1t05UThI8cvJnLzMxxv8j7Qgu0ZyceqVE1cZJBOj1OD/Cwi+mrNA==
+  version "3.59.2"
+  resolved "https://registry.yarnpkg.com/minecraft-data/-/minecraft-data-3.59.2.tgz#457fd8a3d3e16feec651290ed95b2aced4bbf7bf"
+  integrity sha512-ra2xsZ1d0UvcxF77ZtpPqKUchU8pjlhPsh/cX/IW7H3yQSA4j7vPSl2ztD+bzfszAmS6qeHjQK/LifUHmlmK/Q==
 
 minecraft-folder-path@^1.2.0:
   version "1.2.0"
@@ -664,6 +664,11 @@ minecraft-protocol@^1.44.0:
     readable-stream "^4.1.0"
     uuid-1345 "^1.0.1"
     yggdrasil "^1.4.0"
+
+mineflayer-crafting-util@0.0.15:
+  version "0.0.15"
+  resolved "https://registry.yarnpkg.com/mineflayer-crafting-util/-/mineflayer-crafting-util-0.0.15.tgz#9bcadb2fa0064331a89092626f50472926ff6022"
+  integrity sha512-1A0bkWMaZu8jA0fzCCGdsyLIlVbjtjMxNPblvoNG8Rz4OPiK6r65ZjvlHqJC+V2qcpvEGm58ijntYV+S2oPmEQ==
 
 mineflayer-pathfinder@^2.4.5:
   version "2.4.5"
@@ -1253,9 +1258,9 @@ vary@^1, vary@~1.1.2:
   integrity sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==
 
 vec3@^0.1.3, vec3@^0.1.4, vec3@^0.1.7:
-  version "0.1.9"
-  resolved "https://registry.yarnpkg.com/vec3/-/vec3-0.1.9.tgz#3bdd3c85eb1e8a16f77cee782c02b1cd8a1dc0f1"
-  integrity sha512-ylPYzKnnN3fe9ihah0apHGuYG/uQrmzjsHpwOWs6YaItgBMYi/YUahvQ5elZfjonfZwIIgXB7CtwQXIwhOmn6Q==
+  version "0.1.10"
+  resolved "https://registry.yarnpkg.com/vec3/-/vec3-0.1.10.tgz#939aa046ad75c08556abde6be57170cf5e691bc6"
+  integrity sha512-Sr1U3mYtMqCOonGd3LAN9iqy0qF6C+Gjil92awyK/i2OwiUo9bm7PnLgFpafymun50mOjnDcg4ToTgRssrlTcw==
 
 webidl-conversions@^3.0.0:
   version "3.0.1"

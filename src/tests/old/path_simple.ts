@@ -1,4 +1,4 @@
-//@ts-ignore
+//@ts-nocheck
 
 import { EntryNode, InterruptNode, TestNode } from "..";
 import { LogicNode, findPathsToBeginning } from "../../decisions";

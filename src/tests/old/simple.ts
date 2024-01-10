@@ -1,3 +1,5 @@
+//@ts-nocheck
+
 import { EntryNode, InterruptNode, TestNode } from "..";
 import {  LogicNode, findPathsToBeginning, linkNodes } from "../../decisions";
 import { LogicGraph } from "../../decisions/old/old";

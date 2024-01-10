@@ -6,30 +6,54 @@ import type { Block as PBlock } from "prismarine-block";
 import type { Entity } from "prismarine-entity";
 
 
-export class CollectBlock extends StateBehavior {
-  async onStateEntered(...blockTypes: number[]): Promise<void> {
+export class GotoBlock extends StateBehavior {
+  async onStateEntered(opts: {maxDistance?: number}, ...blockTypes: number[]): Promise<void> {
     // console.log("Collecting", blockTypes);
     const block = this.bot.findBlock({
       matching: blockTypes,
-      maxDistance: 16,
+      maxDistance: opts.maxDistance ?? 16
+    });
+
+    if (block) {
+      const goal = new goals.GoalBlock(block.position.x, block.position.y, block.position.z);
+      await this.bot.pathfinder.goto(goal);
+    } else {
+      throw new Error('shit')
+    }
+  }
+}
+
+export class CollectBlock extends StateBehavior {
+  async onStateEntered(opts: {maxDistance?: number}, ...blockTypes: number[]): Promise<void> {
+    // console.log("Collecting", blockTypes);
+    const block = this.bot.findBlock({
+      matching: blockTypes,
+      maxDistance: opts.maxDistance ?? 16
     });
 
     if (block) {
       const goal = new goals.GoalLookAtBlock(block.position, this.bot.world);
       await this.bot.pathfinder.goto(goal);
-      await this.bot.dig(block, true);
+      
+     
 
  
       const listener = (entity: Entity) => {
-        if (entity.type === "object" && entity.objectType === "Item") {
-          const dist = entity.position.distanceTo(block.position);
-          if (dist < 3) {
+        // console.log(entity, entity.objectType)
+        if (entity.type === "other" && entity.displayName === "Item") {
+          const dist = block.position.distanceTo(block.position);
+          if (dist < 2) {
             this.bot.off("entitySpawn", listener);
             const goal = new goals.GoalFollow(entity, 0.5);
             this.bot.pathfinder.setGoal(goal);
           }
         }
       };
+
+      this.bot.on('entitySpawn', listener)
+      setTimeout(()=>this.bot.off('entitySpawn', listener), 5000)
+
+      await this.bot.dig(block, true);
     }
   }
 }
@@ -53,7 +77,6 @@ export class PlaceBlockNear extends StateBehavior {
     const realBlocks = blocks.map(b=>this.bot.blockAt(b)).filter(b=>!!b && this.bot.canSeeBlock(b)) as PBlock[];
 
     const bPos = realBlocks[0];
-    console.log(bPos.toString(), this.bot.entity.position.toString());
 
     const under = this.bot.blockAt(bPos.position.offset(0, -1, 0));
     if (!under) throw new Error("No block under");
